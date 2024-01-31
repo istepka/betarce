@@ -123,14 +123,7 @@ def comprehensive_counterfactual_stability_plot(
         - show: whether to show the plot or not (bool)
     '''
     
-    model_name = None
-    match model.__class__.__name__:
-        case 'MLPClassifier':
-            model_name = 'MLP'
-        case 'RandomForestClassifier':
-            model_name = 'RF'
-        case _:
-            raise ValueError('model must be either a MLPClassifier or a RandomForestClassifier')
+    model_name = model.__class__.__name__
     
     # Prepare the grid
     xx = np.linspace(np.min(X[:,0]), np.max(X[:,0]), grid_density_for_contourf)

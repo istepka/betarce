@@ -82,6 +82,10 @@ def scikit_predict_proba(model: object, x: np.ndarray) -> np.ndarray:
     if isinstance(model, RandomForestClassifier):
         return model.predict_proba(_x)[:, 1]
     
+    # if model is from scikit learn still ok 
+    if hasattr(model, 'predict_proba'):
+        return model.predict_proba(_x)[:, 1]
+    
     raise ValueError('model must be either a MLPClassifier or a RandomForestClassifier')
 
 def scikit_predict_proba_fn(model: object) -> object:

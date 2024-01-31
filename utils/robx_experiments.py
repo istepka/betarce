@@ -39,13 +39,13 @@ for i, (m, name) in enumerate(clf_list):
     print(f'Analysing counterfactual stability for {name}')
     
     comprehensive_counterfactual_stability_plot(
-        model=model,
+        model=m,
         X=X,
         y=y,
         variances=[0.01, 0.05, 0.1, 0.25],
         N=100,
         tau=0.5,
-        grid_density_for_contourf=75,
+        grid_density_for_contourf=50,
         save_path=f'images/calibration/{name}/{name}_cf_stability.png',
         show=False,
     )
