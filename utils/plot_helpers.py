@@ -170,7 +170,7 @@ def comprehensive_counterfactual_stability_plot(
         cbar1 = plt.colorbar(contour, ax=ax[1])
         cbar1.set_label('Counterfactual Stability', rotation=270, fontsize=9, labelpad=15)
         
-        cmap = ListedColormap(['#33cc33', '#cc0000'])
+        cmap = ListedColormap(['#cc0000', '#33cc33'])
         contour = ax[2].contourf(xx, yy, results_cf_stability_test, 25, cmap=cmap, vmin=0, vmax=1)
         ax[2].set_title(f'Counterfactual stability test')
         ax[2].set_xlabel('x1')
@@ -179,7 +179,7 @@ def comprehensive_counterfactual_stability_plot(
         boundaries = [0, tau, 1]
         cvar2 = plt.colorbar(contour, ax=ax[2], boundaries=boundaries, ticks=[0, 1])
         cvar2.set_label('Counterfactual Stability Test', rotation=270, fontsize=9, labelpad=15)
-        cvar2.set_ticklabels(['pass', 'fail'])
+        cvar2.set_ticklabels(['fail', 'pass'])
         
         
         contour = ax[3].contourf(xx, yy, probabilities, 25, cmap="RdBu_r", vmin=0, vmax=1)
@@ -212,8 +212,7 @@ def comprehensive_counterfactual_stability_plot(
         
     for p in processes:
         p.join()
-        
-        
+             
 def plot_calibration_curves(
             clf_list: list,
             X: np.ndarray,
@@ -274,3 +273,57 @@ def plot_calibration_curves(
         
     if show:
         plt.show()
+
+def plot_decision_boundary_with_artifacts(
+    model: object,
+    X: np.ndarray,
+    y: np.ndarray,
+    artifacts: list[dict],
+    save_path: str = None,
+    show: bool = True,
+    ) -> None:
+    '''
+    Plot the decision boundary of a model along with the artifacts.
+    
+    Parameters:
+        - model: the model (object)
+        - X: the data (np.ndarray)
+        - y: the labels (np.ndarray)
+        - artifacts: list of artifacts (list[dict]) - [{'coords': np.ndarray, 'color': str, 'label': str, 'marker': str}]
+        - save_path: the path to save the plot (str)
+        - show: whether to show the plot or not (bool)
+    '''
+
+    # Prepare the grid
+    xx = np.linspace(np.min(X[:,0]), np.max(X[:,0]), 100)
+    yy = np.linspace(np.min(X[:,1]), np.max(X[:,1]), 100)
+    xx, yy = np.meshgrid(xx, yy)
+    grid = np.c_[xx.ravel(), yy.ravel()]
+    
+    
+
+    fig, ax  = plt.subplots(figsize=(5,5))
+    
+    # Plot the crisp decision boundary
+    preds = model.predict(grid).reshape(xx.shape)
+    
+    ax.contourf(xx, yy, preds, 25, cmap="RdBu_r", vmin=0, vmax=1)
+    ax.set_title("Decision boundary")
+    ax.set_xlabel("x1")
+    ax.set_ylabel("x2")
+    
+    
+    
+    # Plot the artifacts
+    # [{'coords': np.ndarray, 'color': str, 'label': str, 'marker': str}]
+    for artifact in artifacts:
+        ax.scatter(artifact['coords'][0], artifact['coords'][1], c=artifact['color'], label=artifact['label'], marker=artifact['marker'])
+        
+    plt.legend()
+    
+    if save_path:
+        __save_plot(plt, save_path)
+        
+    if show:
+        plt.show()
+    

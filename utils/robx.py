@@ -7,7 +7,7 @@ from typing import Union
 def counterfactual_stability(
     x: np.array, 
     pred_func: object, 
-    variance: Union[np.ndarray, float],
+    variance: Union[np.ndarray, float] = 0.1,
     N: int = 100
     ) -> float:
     ''' 
@@ -63,8 +63,8 @@ def RF_predict_class_1_proba(rf: RandomForestClassifier, x) -> np.array:
 def get_conservative_counterfactuals(
     counterfactual: np.ndarray,
     data_X: np.ndarray,
-    predict_class_fn: object,
-    variance: np.ndarray,
+    predict_class_proba_fn: object,
+    variance: Union[np.ndarray, float] = 0.1,
     tau: float = 0.5,
     N: int = 100,
     k: int = 3,
@@ -75,28 +75,28 @@ def get_conservative_counterfactuals(
     Parameters:
         - counterfactual: the counterfactual (np.array 1D)
         - data_X: the training data (np.array 2D)
-        - predict_class_fn: a function that returns the probability of belonging to class 1 (object)
+        - predict_class_proba_fn: a function that returns the probability of belonging to class 1 (object)
         - k: the number of neighbors (int)
     '''
-    cf_class = 1 if predict_class_fn(counterfactual) > 0.5 else 0
+    cf_class = 1 if predict_class_proba_fn(counterfactual) > 0.5 else 0
     
     # Find k-nearest neighbors of the counterfactual that belong to the same class as the counterfactual
-    data_Y = predict_class_fn(data_X)
+    data_Y = predict_class_proba_fn(data_X)
+    data_Y = np.array([1 if y > 0.5 else 0 for y in data_Y]).astype(int)
     
-    # Get the indices of the k-nearest neighbors (L1 distance)
+    # Get the sorted indices of the neighbors by distance, from the closest to the farthest
     dist = np.sum(np.abs(data_X - counterfactual), axis=1)
-    indices = np.argsort(dist)[:k]
+    indices = np.argsort(dist)
     
     # Get the indices of the neighbors that belong to the same class as the counterfactual
     indices = indices[data_Y[indices] == cf_class]
     
-    # Get the neighbors that pass the counterfactual stability test
-    X = data_X[indices]
-    
     conservative_counterfactuals = []
     
-    for x in X:
-        if counterfactual_stability_test(counterfactual_stability(x, predict_class_fn, variance, cf_class, N), tau):
+    for x in data_X[indices]:
+        cs = counterfactual_stability(x, predict_class_proba_fn, variance, N)
+        cst = counterfactual_stability_test(cs, tau)
+        if cst:
             conservative_counterfactuals.append(x)
             
         if len(conservative_counterfactuals) == k:
@@ -111,3 +111,82 @@ def get_conservative_counterfactuals(
     
     return np.array(conservative_counterfactuals)
     
+    
+
+def robx_algorithm(
+    X_train: np.ndarray,
+    predict_class_proba_fn: object,
+    start_counterfactual: np.ndarray,
+    variance: Union[np.ndarray, float] = 0.1,
+    tau: float = 0.5,
+    N: int = 100,
+    k: int = 3,
+    robx_max_iter: int = 100,
+    robx_lambda: float = 0.1,
+    ) -> Union[np.ndarray, None]:
+    '''
+    The ROBX algorithm.
+    
+    Parameters:
+        - X_train: the training data (np.array 2D)
+        - predict_class_proba_fn: a function that returns the probability of belonging to class 1 (object)
+        - start_counterfactual: the starting counterfactual (np.array 1D)
+        - variance: the variance of the data points in the training set (np.array 1D or float)
+        - tau: the threshold (float)
+        - N: the number of samples to be generated (int)
+        - k: the number of neighbors (int)
+        - robx_max_iter: the maximum number of iterations (int)
+        - robx_lambda: the lambda parameter (float) - it controls how much the counterfactual moves towards its 
+            conservative counterfactual at each iteration. The closer to 1, the faster the counterfactual moves towards.
+    '''
+    
+    # Initial check if the starting counterfactual passes the counterfactual stability test
+    if counterfactual_stability_test(counterfactual_stability(start_counterfactual, predict_class_proba_fn, variance, N), tau):
+        return start_counterfactual
+    
+    
+    # Find k conservative counterfactuals
+    conservative_counterfactuals = get_conservative_counterfactuals(
+        counterfactual=start_counterfactual,
+        data_X=X_train,
+        predict_class_proba_fn=predict_class_proba_fn,
+        variance=variance,
+        tau=tau,
+        N=N,
+        k=k,
+    )
+    
+    # If no conservative counterfactuals are found, return None
+    # Typically this happens when either tau or/and variance (ie sampling radius) are too big
+    if conservative_counterfactuals is None:
+        return None
+    
+    # Create k copies of the starting counterfactual
+    counterfactuals = [start_counterfactual.copy() for _ in range(k)]
+    
+    # Optimization loop: 
+    # - each counterfactual is optimized independently and moves towards its conservative counterfactual
+    # - the optimization stops when the first counterfactual passes the counterfactual stability test
+    # - pessimistically, the optimization stops when first counterfactual reaches its conservative counterfactual
+    # - each step is a convex combination of the current counterfactual and its conservative counterfactual
+    
+    history = []
+    for c in counterfactuals: history.append([c])
+    
+    for iteration in range(robx_max_iter):
+        for i, (cf, cf_conservative) in enumerate(zip(counterfactuals, conservative_counterfactuals)):
+            cf = robx_lambda * cf_conservative + (1 - robx_lambda) * cf
+            history[i].append(cf)
+            counterfactuals[i] = cf
+            
+            if counterfactual_stability_test(counterfactual_stability(cf, predict_class_proba_fn, variance, N), tau):
+                return cf
+            
+    
+    # If the optimization loop does not stop, return none
+    return None
+            
+            
+    
+
+
