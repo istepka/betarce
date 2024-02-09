@@ -39,11 +39,87 @@ def plot_data(X: np.ndarray, y: np.ndarray):
     plt.figure(figsize=(5, 5))
     plt.scatter(X[:,0], X[:,1], c=y)
     plt.show()
+    
+class Dataset:
+        def __init__(self, name: str, random_state: int = 0) -> None:
+            '''
+            Initialize the dataset.
+            
+            Parameters:
+                - name: the name of the dataset (str) should be one of ['german', 'fico', 'compas', 'donuts', 'moons']
+                - random_state: the random state (int)
+            '''
+            
+            self.name = name
+            self.random_state = random_state
+            
+            match self.name:
+                case 'german':
+                    self.data = _german()
+                case 'fico':
+                    self.data = _fico()
+                case 'compas':
+                    self.data = _compas()
+                case 'donuts':
+                    self.data = _donuts()
+                case 'moons':
+                    self.data = _moons()
+                case _:
+                    raise ValueError(f'Unknown dataset {self.name}')
+                
+            self.raw_df = self.data['raw_df']
+            self.target_column = self.data['target_column']
+            self.continuous_columns = self.data['continuous_columns']
+            self.categorical_columns = self.data['categorical_columns']
+            self.freeze_columns = self.data['freeze_columns']
+            self.feature_ranges = self.data['feature_ranges']
+            
+        def __str__(self) -> str:
+            return f'Dataset_{self.name}'
+        
+        def __repr__(self) -> str:
+            return f'Dataset_{self.name}'
+        
+        def __len__(self) -> int:
+            return len(self.raw_df)
+        
+        def __getitem__(self, index: int) -> pd.Series:
+            return self.raw_df.iloc[index]
+        
+        def get_numpy(self) -> tuple[np.ndarray]:
+            '''
+            Get the dataset in numpy format.
+            
+            Returns:
+                - the dataset in numpy format (tuple[np.ndarray])
+            '''
+            X = self.raw_df.drop(columns=[self.target_column]).values
+            y = self.raw_df[self.target_column].values
+            return X, y 
+        
+        def get_raw_df(self) -> pd.DataFrame:
+            '''
+            Get the raw dataframe.
+            
+            Returns:
+                - the raw dataframe (pd.DataFrame)
+            '''
+            return self.raw_df
+        
+        def overwrite_raw_df(self, new_raw_df: pd.DataFrame) -> None:
+            '''
+            Overwrite the raw dataframe.
+            
+            Parameters:
+                - new_raw_df: the new raw dataframe (pd.DataFrame)
+            '''
+            self.raw_df = new_raw_df 
+            self.data['raw_df'] = new_raw_df
 
 class DatasetPreprocessor:
     
     def __init__(self,
-                name: str, 
+                dataset: Dataset,
                 split: float = 0.8, 
                 random_state: int = 0, 
                 stratify: bool = False, 
@@ -53,7 +129,7 @@ class DatasetPreprocessor:
         Initialize the dataset preprocessor.
         
         Parameters:
-            - name: the name of the dataset (str) should be one of ['german', 'fico', 'compas']
+            - dataset: the dataset (Dataset)
             - split: the split of the dataset (float)
             - random_state: the random state (int)
             - stratify: whether to stratify the dataset (bool)
@@ -61,7 +137,7 @@ class DatasetPreprocessor:
             - one_hot: whether to one-hot encode the dataset (bool)
         '''
         
-        self.name = name
+        self.dataset = dataset
         self.split = split
         self.random_state = random_state
         self.stratify = stratify
@@ -70,25 +146,11 @@ class DatasetPreprocessor:
         
         self.scaler = StandardScaler()
         self.encoder = OneHotEncoder(sparse_output=False)
-        
-
-        match self.name:
-            case 'german':
-                self.data = _german()
-            case 'fico':
-                self.data = _fico()
-            case 'compas':
-                self.data = _compas()
-            case _:
-                raise ValueError(f'Unknown dataset {self.name}')
-            
-        
-        self.raw_df = self.data['raw_df']
-        self.target_column = self.data['target_column']
-        self.continuous_columns = self.data['continuous_columns']
-        self.categorical_columns = self.data['categorical_columns']
-        self.freeze_columns = self.data['freeze_columns']
-        self.feature_ranges = self.data['feature_ranges']
+           
+        self.raw_df = self.dataset.raw_df
+        self.target_column = self.dataset.target_column
+        self.continuous_columns = self.dataset.continuous_columns
+        self.categorical_columns = self.dataset.categorical_columns
         
         self.X_train, self.X_test, self.y_train, self.y_test = self.__initial_transform_prep()
 
@@ -193,6 +255,28 @@ class DatasetPreprocessor:
             columns=continuous_columns
         )
         return X_scaled
+    
+    def get_data(self) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
+        '''
+        Get the preprocessed data.
+        
+        Returns:
+            - the preprocessed data (tuple[pd.DataFrame])
+        '''
+        return self.X_train, self.X_test, self.y_train, self.y_test
+    
+    def get_numpy(self) -> tuple[np.ndarray]:
+        '''
+        Get the preprocessed data in numpy format.
+        
+        Returns:
+            - the preprocessed data in numpy format (tuple[np.ndarray])
+        '''
+        X_train = self.X_train.values
+        X_test = self.X_test.values
+        y_train = self.y_train.values
+        y_test = self.y_test.values
+        return X_train, X_test, y_train, y_test
 
 
 def _german(path: str = 'data/german.csv') -> dict:
@@ -326,11 +410,94 @@ def _compas(path: str = 'data/compas.csv') -> dict:
     
     return data
 
+def _moons(n_samples: int = 1000, noise: float = 0.1, random_state: int = 0) -> dict:
+    '''
+    Create two moons with the same number of samples and noise.
+    
+    Parameters:
+        - n_samples: the number of samples for each moon (int)
+        - noise: the noise of the moons (float)
+        - random_state: the random state (int)
+    '''
+    data = make_moons(n_samples=n_samples, noise=noise, random_state=random_state)
+    data2 = make_moons(n_samples=n_samples, noise=noise, random_state=random_state + 1)
+    
+    X = np.concatenate([data[0], data2[0] / 1.5 + 1.6]) 
+    y = np.concatenate([data[1], data2[1]])
+    
+    # Normalize the data to 0-1
+    X = (X - X.min()) / (X.max() - X.min())
+    
+    raw_df = pd.DataFrame(X, columns=['x1', 'x2'])
+    raw_df['y'] = y
+    
+    categorical_columns = []
+    continuous_columns = ['x1', 'x2']
+    target_column = 'y'
+    freeze_columns = []
+    feature_ranges = {
+        'x1': [0, 1],
+        'x2': [0, 1]
+    }
+    
+    data = {
+        'raw_df': raw_df,
+        'categorical_columns': categorical_columns,
+        'continuous_columns': continuous_columns,
+        'target_column': target_column,
+        'freeze_columns': freeze_columns,
+        'feature_ranges': feature_ranges
+    }
+    
+    return data
+
+def _donuts(n_samples: int = 1000, noise: float = 0.1, random_state: int = 0) -> dict:
+    '''
+    Create two donuts with the same number of samples and noise.
+    
+    Parameters:
+        - n_samples: the number of samples for each donut (int)
+        - noise: the noise of the donuts (float)
+        - random_state: the random state (int)
+    '''
+    data = make_circles(n_samples=n_samples, noise=noise, random_state=random_state)
+    data2 = make_circles(n_samples=n_samples, noise=noise, random_state=random_state + 1, factor=0.5)
+    
+    X = np.concatenate([data[0], data2[0] / 1.5 + 1.6]) 
+    y = np.concatenate([data[1], data2[1]])
+    
+    # Normalize the data to 0-1
+    X = (X - X.min()) / (X.max() - X.min())
+    
+    raw_df = pd.DataFrame(X, columns=['x1', 'x2'])
+    raw_df['y'] = y
+    
+    categorical_columns = []
+    continuous_columns = ['x1', 'x2']
+    target_column = 'y'
+    freeze_columns = []
+    feature_ranges = {
+        'x1': [0, 1],
+        'x2': [0, 1]
+    }
+    
+    data = {
+        'raw_df': raw_df,
+        'categorical_columns': categorical_columns,
+        'continuous_columns': continuous_columns,
+        'target_column': target_column,
+        'freeze_columns': freeze_columns,
+        'feature_ranges': feature_ranges
+    }
+    
+    return data  
 
 if __name__ == '__main__':
     
     # X, y = create_two_donuts()
     # plot_data(X, y)
     
-    german_dataset = DatasetPreprocessor(name='german', standardize_data=True, one_hot=True)
-    print(german_dataset.X_train.head())
+    german_dataset = Dataset(name='moons')
+    
+    german_preprocessor = DatasetPreprocessor(german_dataset, standardize_data=True, one_hot=True)
+    print(german_preprocessor.X_train.head())
