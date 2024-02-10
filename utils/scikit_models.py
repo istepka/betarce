@@ -6,7 +6,7 @@ import joblib
 import os
 
 
-def __train_model(model: str,
+def train_model(model: str,
                   X: np.ndarray, 
                   y: np.ndarray,
                   hparams: dict = None,
@@ -21,7 +21,7 @@ def __train_model(model: str,
         - hparams: the hyperparameters (dict)
     '''
     
-    match model:
+    match model.upper():
         case 'MLP':
             model = MLPClassifier()
         case 'RF':
@@ -117,7 +117,7 @@ if __name__ == '__main__':
         'early_stopping': True,
         }
     
-    mlp = __train_model('MLP', X, y, hparams=mlp_hparams)
+    mlp = train_model('MLP', X, y, hparams=mlp_hparams)
     save_model(mlp, 'models/mlp.joblib')
     plot_crisp_decision_boundary(mlp, X, y, save_path='images/calibration/mlp_decision_boundary.png', show=False)
     plot_model_probabilites(mlp, X, y, save_path='images/calibration/mlp_probabilities.png', show=False)
@@ -130,7 +130,7 @@ if __name__ == '__main__':
         'random_state': 0,
         }
     
-    rf = __train_model('RF', X, y, hparams=rf_hparams)
+    rf = train_model('RF', X, y, hparams=rf_hparams)
     save_model(rf, 'models/rf.joblib')
     plot_crisp_decision_boundary(rf, X, y, save_path='images/calibration/rf_decision_boundary.png', show=False)
     plot_model_probabilites(rf, X, y, save_path='images/calibration/rf_probabilities.png', show=False)

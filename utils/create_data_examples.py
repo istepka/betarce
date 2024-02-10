@@ -4,7 +4,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.neural_network import MLPClassifier
 import matplotlib.pyplot as plt
 import pandas as pd
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.preprocessing import StandardScaler, OneHotEncoder, LabelEncoder
 
 
 def create_two_donuts(n_samples: int = 1000, noise: float = 0.1, random_state: int = 0) -> np.ndarray:
@@ -115,6 +115,24 @@ class Dataset:
             '''
             self.raw_df = new_raw_df 
             self.data['raw_df'] = new_raw_df
+            
+        def get_target_column(self) -> str:
+            '''
+            Get the target column.
+            
+            Returns:
+                - the target column (str)
+            '''
+            return self.target_column
+        
+        def get_continuous_columns(self) -> list[str]:
+            '''
+            Get the continuous columns.
+            
+            Returns:
+                - the continuous columns (list[str])
+            '''
+            return self.continuous_columns
 
 class DatasetPreprocessor:
     
@@ -124,7 +142,9 @@ class DatasetPreprocessor:
                 random_state: int = 0, 
                 stratify: bool = False, 
                 standardize_data: bool = False, 
-                one_hot: bool = False) -> None:
+                one_hot: bool = False,
+                binarize_y: bool = True
+                ) -> None:
         '''
         Initialize the dataset preprocessor.
         
@@ -135,6 +155,7 @@ class DatasetPreprocessor:
             - stratify: whether to stratify the dataset (bool)
             - standardize_data: whether to standardize the dataset (bool)
             - one_hot: whether to one-hot encode the dataset (bool)
+            - binarize_y: whether to binarize the target variable (bool)
         '''
         
         self.dataset = dataset
@@ -143,9 +164,11 @@ class DatasetPreprocessor:
         self.stratify = stratify
         self.standardize_data = standardize_data
         self.one_hot = one_hot
+        self.binarize_y = binarize_y
         
         self.scaler = StandardScaler()
         self.encoder = OneHotEncoder(sparse_output=False)
+        self.label_encoder = LabelEncoder()
            
         self.raw_df = self.dataset.raw_df
         self.target_column = self.dataset.target_column
@@ -198,6 +221,10 @@ class DatasetPreprocessor:
             
             X_train = pd.concat([X_train, X_train_o], axis=1)
             X_test = pd.concat([X_test, X_test_o], axis=1)
+            
+        if self.binarize_y:
+            y_train = self.label_encoder.fit_transform(y_train)
+            y_test = self.label_encoder.transform(y_test)
             
         return [X_train, X_test, y_train, y_test]
      
@@ -501,3 +528,4 @@ if __name__ == '__main__':
     
     german_preprocessor = DatasetPreprocessor(german_dataset, standardize_data=True, one_hot=True)
     print(german_preprocessor.X_train.head())
+    print(german_preprocessor.y_test)
