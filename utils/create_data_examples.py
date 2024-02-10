@@ -4,7 +4,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.neural_network import MLPClassifier
 import matplotlib.pyplot as plt
 import pandas as pd
-from sklearn.preprocessing import StandardScaler, OneHotEncoder, LabelEncoder
+from sklearn.preprocessing import MinMaxScaler, StandardScaler, OneHotEncoder, LabelEncoder
 
 
 def create_two_donuts(n_samples: int = 1000, noise: float = 0.1, random_state: int = 0) -> np.ndarray:
@@ -26,7 +26,6 @@ def create_two_donuts(n_samples: int = 1000, noise: float = 0.1, random_state: i
     X = (X - X.min()) / (X.max() - X.min())
     
     return X, y
-
 
 def plot_data(X: np.ndarray, y: np.ndarray):
     '''
@@ -141,7 +140,7 @@ class DatasetPreprocessor:
                 split: float = 0.8, 
                 random_state: int = 0, 
                 stratify: bool = False, 
-                standardize_data: bool = False, 
+                standardize_data: str = 'minmax',
                 one_hot: bool = False,
                 binarize_y: bool = True
                 ) -> None:
@@ -153,7 +152,7 @@ class DatasetPreprocessor:
             - split: the split of the dataset (float)
             - random_state: the random state (int)
             - stratify: whether to stratify the dataset (bool)
-            - standardize_data: whether to standardize the dataset (bool)
+            - standardize_data: whether to standardize the dataset (str) should be one of ['minmax', 'zscore']
             - one_hot: whether to one-hot encode the dataset (bool)
             - binarize_y: whether to binarize the target variable (bool)
         '''
@@ -166,7 +165,10 @@ class DatasetPreprocessor:
         self.one_hot = one_hot
         self.binarize_y = binarize_y
         
-        self.scaler = StandardScaler()
+        if self.standardize_data not in ['minmax', 'zscore']:
+            raise ValueError('standardize_data should be one of ["minmax", "zscore"]')
+        
+        self.scaler = StandardScaler() if self.standardize_data == 'zscore' else MinMaxScaler()
         self.encoder = OneHotEncoder(sparse_output=False)
         self.label_encoder = LabelEncoder()
            
@@ -526,6 +528,6 @@ if __name__ == '__main__':
     
     german_dataset = Dataset(name='moons')
     
-    german_preprocessor = DatasetPreprocessor(german_dataset, standardize_data=True, one_hot=True)
+    german_preprocessor = DatasetPreprocessor(german_dataset, standardize_data='minmax', one_hot=True)
     print(german_preprocessor.X_train.head())
     print(german_preprocessor.y_test)
