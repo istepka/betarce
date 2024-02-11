@@ -132,7 +132,7 @@ class TwoDatasetsExperiment(ExperimentBase):
         self.X_train2, self.X_test2, self.y_train2, self.y_test2 = s2
         
         self.robXHparams = {
-            'tau': 0.8,
+            'tau': 0.6,
             'variance': 0.1,
             'N': 1000,
         }
@@ -270,7 +270,7 @@ class TwoDatasetsExperiment(ExperimentBase):
             robust_cf, _ = robx_algorithm(
                 X_train = X_train.to_numpy(),
                 predict_class_proba_fn = predict_fn,
-                start_counterfactual = x_numpy,
+                start_counterfactual = cf_numpy,
                 tau = self.robXHparams['tau'],
                 variance = self.robXHparams['variance'],
                 N = self.robXHparams['N'],

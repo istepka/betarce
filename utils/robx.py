@@ -1,3 +1,4 @@
+from copy import deepcopy
 import numpy as np
 from sklearn.neural_network import MLPClassifier
 from sklearn.ensemble import RandomForestClassifier
@@ -88,20 +89,22 @@ def get_conservative_counterfactuals(
     # Find k-nearest neighbors of the counterfactual that belong to the same class as the counterfactual
     data_Y = predict_class_proba_fn(data_X)
     data_Y = (data_Y > gamma).astype(int)
+    correct_class_mask = data_Y == cf_class
+    data = data_X[correct_class_mask]
     
     # Get the sorted indices of the neighbors by distance, from the closest to the farthest
-    dist = np.sum(np.abs(data_X - counterfactual), axis=1)
+    dist = np.sum(np.abs(data - counterfactual), axis=1)
     indices = np.argsort(dist)
     
     # Get the indices of the neighbors that belong to the same class as the counterfactual
-    mask = data_Y[indices] == cf_class
-    indices = indices[mask]
-    data = data_X[indices]
+    data = data[indices]
     
     conservative_counterfactuals = []
+    history = []
     
     for x in data:
         cs = counterfactual_stability(x, predict_class_proba_fn, variance, N)
+        history.append(cs)
         cst = counterfactual_stability_test(cs, tau)
         if cst:
             conservative_counterfactuals.append(x)
@@ -111,7 +114,7 @@ def get_conservative_counterfactuals(
         
     if len(conservative_counterfactuals) < k:
         print('Warning: not enough neighbors pass the counterfactual stability test')
-
+        print('Counterfactual stability history:', history)
         if len(conservative_counterfactuals) == 0:
             print('Warning: no neighbors pass the counterfactual stability test')
             return None
@@ -149,7 +152,8 @@ def robx_algorithm(
     
     # Initial check if the starting counterfactual passes the counterfactual stability test
     if counterfactual_stability_test(counterfactual_stability(start_counterfactual, predict_class_proba_fn, variance, N), tau):
-        return start_counterfactual
+        print('The starting counterfactual passes the counterfactual stability test')
+        return start_counterfactual, None
     
     
     # Find k conservative counterfactuals
@@ -166,10 +170,10 @@ def robx_algorithm(
     # If no conservative counterfactuals are found, return None
     # Typically this happens when either tau or/and variance (ie sampling radius) are too big
     if conservative_counterfactuals is None:
-        return None
+        return None, None
     
     # Create k copies of the starting counterfactual
-    counterfactuals = [start_counterfactual.copy() for _ in range(k)]
+    counterfactuals = [deepcopy(start_counterfactual) for _ in range(k)]
     
     # Optimization loop: 
     # - each counterfactual is optimized independently and moves towards its conservative counterfactual
@@ -190,5 +194,5 @@ def robx_algorithm(
                 return cf, conservative_counterfactuals
              
     # If the optimization loop does not stop, return none
-    return None
+    return None, None
                  
