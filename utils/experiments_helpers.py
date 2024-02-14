@@ -13,6 +13,7 @@ from create_data_examples import DatasetPreprocessor, Dataset
 from scikit_models import load_model, scikit_predict_proba_fn, train_model, save_model
 from dice_wrapper import get_dice_explainer, get_dice_counterfactuals
 from robx import robx_algorithm, counterfactual_stability
+from config_wrapper import ConfigWrapper
 
 class ExperimentDataBase: 
     def __init__(self) -> None:
@@ -107,20 +108,75 @@ class TwoSamplesOneDatasetExperimentData(ExperimentDataBase):
         
         return (X_train1, X_test1, y_train1, y_test1), (X_train2, X_test2, y_train2, y_test2)
 
+class ExperimentResults:
+    def __init__(self) -> None:
+        self.results = defaultdict(lambda: list())
+        self.artifacts = {}
+    
+    def add_metric(self, metric: str, value: float) -> None:
+        self.results[metric].append(value)
+        
+    def add_artifact(self, key: str, value: object) -> None:
+        self.artifacts[key] = value
+    
+    def get_artifact(self, key: str) -> object:
+        return self.artifacts[key]
+    
+    def get_all_artifacts(self) -> dict:
+        return self.artifacts
+    
+    def get_all_artifact_keys(self) -> list:
+        return list(self.artifacts.keys())
+    
+    def get_all_results(self) -> dict:
+        return self.results
+    
+    def get_mean_results(self) -> dict:
+        return {k: np.mean(v) for k, v in self.results.items()}
+    
+    def get_std_results(self) -> dict:
+        return {k: np.std(v) for k, v in self.results.items()}
+    
+    def get_results_for_metric(self, metric: str) -> list:
+        return self.results[metric]
+    
+    def get_mean_for_metric(self, metric: str) -> float:
+        return np.mean(self.results[metric])
+    
+    def get_std_for_metric(self, metric: str) -> float:
+        return np.std(self.results[metric])
+    
+    def reset(self) -> None:
+        self.results = defaultdict(lambda: list())
+        
+    def get_all_metric_names(self) -> list:
+        return list(self.results.keys())
+    
+    def get_results_as_pandas(self) -> pd.DataFrame:
+        return pd.DataFrame(self.results)
+    
+    def __str__(self) -> str:
+        return f'ExperimentResults with {len(self.results)} metrics and {len(self.artifacts)} artifacts.'
+    
+    def __repr__(self) -> str:
+        return self.__str__()
+    
 class ExperimentBase:
     def run(self) -> None:
         raise NotImplementedError('Method not implemented.')
-    
+
 class TwoDatasetsExperiment(ExperimentBase):
     
     def __init__(self, 
                  model_type: str,
                  experiment_data: TwoSamplesOneDatasetExperimentData,
+                 config: ConfigWrapper | None = None,
                  wandb_logger: bool = False,
                  ) -> None:
         super().__init__()
         
         self.model_type = model_type
+        self.config = config
         
         self.experiment_data = experiment_data  
         self.wandb_logger = wandb_logger
@@ -131,33 +187,16 @@ class TwoDatasetsExperiment(ExperimentBase):
         self.X_train1, self.X_test1, self.y_train1, self.y_test1 = s1
         self.X_train2, self.X_test2, self.y_train2, self.y_test2 = s2
         
-        self.robXHparams = {
-            'tau': 0.6,
-            'variance': 0.1,
-            'N': 1000,
-        }
+        self.robXHparams = config.get_model_config('robXHparams')
+        
+        self.results = ExperimentResults()
     
     def prepare(self) -> None: 
-        # Fit two models on the two samples
-        
+        # Fit two models on the two samples  
         if self.model_type == 'mlp':
-            hparams = {
-            'hidden_layer_sizes': (100, 100),
-            'activation': 'relu',
-            'solver': 'adam',
-            'learning_rate_init': 0.01,
-            'max_iter': 1000,
-            'random_state': 0,
-            'verbose': True,
-            'early_stopping': True,
-            }
-            
+            hparams = self.config.get_config_by_key('mlp')
         elif self.model_type == 'rf':
-            hparams = {
-            'n_estimators': 100,
-            'max_depth': 10,
-            'random_state': 0,
-            }
+            hparams = self.config.get_config_by_key('rf')
         else:
             raise ValueError('model_type must be either "mlp" or "rf"')
         
@@ -165,7 +204,6 @@ class TwoDatasetsExperiment(ExperimentBase):
             
         self.model1 = train_model(self.model_type, self.X_train1, self.y_train1, hparams=hparams)
         self.model2 = train_model(self.model_type, self.X_train2, self.y_train2, hparams=hparams)
-        
         
         save_model(self.model1, f'models/{self.model_type}_sample1_TwoDatasetsExperiment.joblib')
         save_model(self.model2, f'models/{self.model_type}_sample2_TwoDatasetsExperiment.joblib')
@@ -178,8 +216,7 @@ class TwoDatasetsExperiment(ExperimentBase):
         self.log_artifact('accuracy_model2', self.acc2)
         
     
-    def run(self, base_cf_method: str = 'dice') -> dict:                
-        results = defaultdict(lambda: defaultdict(list))
+    def run(self, base_cf_method: str = 'dice') -> bool:
         
         # 1) Generate counterfactual examples for all test samples of the first model
         X_train = self.X_train1
@@ -188,7 +225,6 @@ class TwoDatasetsExperiment(ExperimentBase):
         y_test = self.y_test1
         model = self.model1
         
-        results_key = f'experiment'
         lof_model = LocalOutlierFactor(n_neighbors=50, novelty=True, p=1)
         lof_model.fit(X_train.to_numpy()) # Fit the LOF model without column names
         lof_model2 = LocalOutlierFactor(n_neighbors=50, novelty=True, p=1)
@@ -196,6 +232,13 @@ class TwoDatasetsExperiment(ExperimentBase):
         
         predict_fn = scikit_predict_proba_fn(model)
         predict_fn_2 = scikit_predict_proba_fn(self.model2)
+        
+        empty_metrics = {
+            'validity': np.nan,
+            'proximityL1': np.nan,
+            'lof': np.nan,
+            'cf_counterfactual_stability': np.nan
+        }
         
         
         X_train_w_target = X_train.copy()
@@ -217,55 +260,61 @@ class TwoDatasetsExperiment(ExperimentBase):
         warnings.filterwarnings('ignore', category=UserWarning)
         for j in tqdm(range(len(X_test)), total=len(X_test)):
             
-            x = X_test[j:j+1] # Get the instance to be explained pd.DataFrame
-            y = model.predict(x)[0] # Get the label of the instance, as we rely on the model not on the ground truth
+            orig_x = X_test[j:j+1] # Get the instance to be explained pd.DataFrame
+            orig_y = model.predict(orig_x)[0] # Get the label of the instance, as we rely on the model not on the ground truth
             
             start_time = time.time()
             dice_cf = get_dice_counterfactuals(
                 dice_exp=explainer,
-                query_instance=x,
+                query_instance=orig_x,
                 total_CFs=1,
                 desired_class='opposite',
-                proximity_weight=1.0,
+                proximity_weight=2,
                 diversity_weight=0.5,
             )
-            
             generation_time = time.time() - start_time # Get the generation time in seconds
+            
+            x_numpy = orig_x.to_numpy()[0]
+            
             if dice_cf is None:
                 cf_numpy = None
+                metrics = empty_metrics.copy()
+                metrics_2 = empty_metrics.copy()
             else: 
                 cf_numpy = dice_cf[0].final_cfs_df.to_numpy()[0][:-1]
-            x_numpy = x.to_numpy()[0]
-            cf_label = model.predict(cf_numpy.reshape(1, -1))[0]
-            validity = int(cf_label) == 1 - int(y) # Opposite class is valid
-            proximityL1 = np.sum(np.abs(x_numpy - cf_numpy))
-            lof = lof_model.score_samples(cf_numpy.reshape(1, -1))[0]
-            cf_counterfactual_stability = counterfactual_stability(
-                cf_numpy, predict_fn, self.robXHparams['variance'], self.robXHparams['N']
-            )
-            # Metrics under model2
-            cf_label_2 = self.model2.predict(cf_numpy.reshape(1, -1))[0]
-            validity_2 = int(cf_label_2) == 1 - int(y)
-            lof_2 = lof_model2.score_samples(cf_numpy.reshape(1, -1))[0]
+                
+                metrics = self.calculate_metrics(
+                    cf = cf_numpy,
+                    cf_desired_class=1 - orig_y,
+                    x = x_numpy,
+                    model = model,
+                    lof_model = lof_model,
+                    predict_fn = predict_fn,
+                    robXHparams = self.robXHparams
+                )
+                  
+                metrics_2 = self.calculate_metrics(
+                    cf = cf_numpy,
+                    cf_desired_class=1 - orig_y,
+                    x = x_numpy,
+                    model = self.model2,
+                    lof_model = lof_model2,
+                    predict_fn = predict_fn_2,
+                    robXHparams = self.robXHparams
+                )    
+                
+            for k, v in metrics.items():
+                self.results.add_metric(k, v)
+            for k, v in metrics_2.items():
+                self.results.add_metric(f'{k}_2', v)
+                
+            self.results.add_artifact('original_instance', x_numpy)
+            self.results.add_artifact('base_counterfactual', cf_numpy)
             
-            
-            cf_counterfactual_stability_2 = counterfactual_stability(
-                cf_numpy, predict_fn_2, self.robXHparams['variance'], self.robXHparams['N']
-            )
-            
-            
-            results[results_key]['original_instance'].append(x_numpy)
-            results[results_key]['base_counterfactual'].append(cf_numpy)
-            results[results_key]['base_generation_time'].append(generation_time)
-            results[results_key]['base_validity'].append(validity)
-            results[results_key]['base_lof'].append(lof)
-            results[results_key]['base_proximity'].append(proximityL1)
-            results[results_key]['base_counterfactual_stability'].append(cf_counterfactual_stability)
-            results[results_key]['base_validity_2'].append(validity_2)
-            results[results_key]['base_lof_2'].append(lof_2)
-            results[results_key]['base_counterfactual_stability_2'].append(cf_counterfactual_stability_2)
-            
-            
+            self.results.add_metric('generation_time', generation_time)
+                
+                
+            # ROBX PART      
             start_time = time.time()
             robust_cf, _ = robx_algorithm(
                 X_train = X_train.to_numpy(),
@@ -275,54 +324,86 @@ class TwoDatasetsExperiment(ExperimentBase):
                 variance = self.robXHparams['variance'],
                 N = self.robXHparams['N'],
             )
-            
             rob_generation_time = time.time() - start_time # Get the generation time in seconds
             
             if robust_cf is None:
-                rob_cf_numpy = None
-                rob_cf_label = None
-                rob_validity = None
-                rob_proximityL1 = None
-                rob_lof = None
-                rob_cf_counterfactual_stability = None
+                rob_metrics = empty_metrics.copy()
+                rob_metrics_2 = empty_metrics.copy()
+            else:    
+                cf_desired_class = 1 - orig_y
                 
-                # Metrics under model2
-                rob_cf_label_2 = None
-                rob_validity_2 = None
-                rob_lof_2 = None
-                rob_cf_counterfactual_stability_2 = None
-            else:
-                rob_cf_numpy = robust_cf
-                rob_cf_label = model.predict(rob_cf_numpy.reshape(1, -1))[0]
-                rob_validity = int(rob_cf_label) == 1 - int(y) # Opposite class is valid
-                rob_proximityL1 = np.sum(np.abs(x_numpy - rob_cf_numpy))
-                rob_lof = lof_model.score_samples(rob_cf_numpy.reshape(1, -1))[0]
-                rob_cf_counterfactual_stability = counterfactual_stability(
-                    rob_cf_numpy, predict_fn, self.robXHparams['variance'], self.robXHparams['N']
-                )
-                
-                # Metrics under model2
-                rob_cf_label_2 = self.model2.predict(rob_cf_numpy.reshape(1, -1))[0]
-                rob_validity_2 = int(rob_cf_label_2) == 1 - int(y)
-                rob_lof_2 = lof_model2.score_samples(rob_cf_numpy.reshape(1, -1))[0]
-                rob_cf_counterfactual_stability_2 = counterfactual_stability(
-                    rob_cf_numpy, predict_fn_2, self.robXHparams['variance'], self.robXHparams['N']
+                rob_metrics = self.calculate_metrics(
+                    cf = robust_cf,
+                    cf_desired_class=cf_desired_class,
+                    x = x_numpy,
+                    model = model,
+                    lof_model = lof_model,
+                    predict_fn = predict_fn,
+                    robXHparams = self.robXHparams
                 )
             
-            results[results_key]['robust_counterfactual'].append(rob_cf_numpy)
-            results[results_key]['robust_generation_time'].append(rob_generation_time)
-            results[results_key]['robust_validity'].append(rob_validity)
-            results[results_key]['robust_lof'].append(rob_lof)
-            results[results_key]['robust_proximity'].append(rob_proximityL1)
-            results[results_key]['robust_counterfactual_stability'].append(rob_cf_counterfactual_stability)
-            results[results_key]['robust_validity_2'].append(rob_validity_2)
-            results[results_key]['robust_lof_2'].append(rob_lof_2)
-            results[results_key]['robust_counterfactual_stability_2'].append(rob_cf_counterfactual_stability_2) 
+                rob_metrics_2 = self.calculate_metrics(
+                    cf = robust_cf,
+                    cf_desired_class=cf_desired_class,
+                    x = x_numpy,
+                    model = self.model2,
+                    lof_model = lof_model2,
+                    predict_fn = predict_fn_2,
+                    robXHparams = self.robXHparams
+                )
+                
+            for k, v in rob_metrics.items():
+                self.results.add_metric(f'robust_{k}', v)
+                
+            for k, v in rob_metrics_2.items():
+                self.results.add_metric(f'robust_{k}_2', v)
+            
+            self.results.add_artifact('robust_counterfactual', robust_cf)
+            self.results.add_metric('robust_generation_time', rob_generation_time)
             
             if j == 3: # WARNING: REMOVE THIS LINE AFTER TESTING
                 break
             
-        return results
+        return True
+    
+    def calculate_metrics(self, cf: np.ndarray, 
+                          cf_desired_class: int,
+                          x: np.ndarray, 
+                          model: object,
+                          lof_model: LocalOutlierFactor,
+                          predict_fn: callable,
+                          robXHparams: dict
+        ) -> dict:
+        '''
+        Calculates the metrics for a counterfactual example.
+        
+        Parameters:
+            - cf: (np.ndarray) The counterfactual example.
+            - cf_desired_class: (int) The desired class of the counterfactual example.
+            - x: (np.ndarray) The original instance.
+            - model: (object) The model to be used for predictions.
+            - lof_model: (object) The Local Outlier Factor model.
+            - predict_fn: (function) The function to be used for predictions.
+            - robXHparams: (dict) The hyperparameters for the RobustX algorithm.
+        
+        Returns:
+            - dict: The metrics.
+        '''
+        
+        cf_label = model.predict(cf.reshape(1, -1))[0]
+        validity = int(cf_label) == 1 - cf_desired_class
+        proximityL1 = np.sum(np.abs(x - cf))
+        lof = lof_model.score_samples(cf.reshape(1, -1))[0]
+        cf_counterfactual_stability = counterfactual_stability(
+            cf, predict_fn, robXHparams['variance'], robXHparams['N']
+        )
+        
+        return {
+            'validity': validity,
+            'proximityL1': proximityL1,
+            'lof': lof,
+            'cf_counterfactual_stability': cf_counterfactual_stability
+        }
     
     def log_artifact(self, key: str, value: object) -> None:
         if self.wandb_logger:
@@ -330,7 +411,10 @@ class TwoDatasetsExperiment(ExperimentBase):
         
         print(f'Accuracy of model 1: {self.acc1}')
         print(f'Accuracy of model 2: {self.acc2}')
-
+           
+    def get_results(self) -> ExperimentResults:
+        return self.results
+        
 
 if __name__ == '__main__':
     dataset = Dataset('german')
@@ -350,12 +434,19 @@ if __name__ == '__main__':
     print(X_train1.shape, X_test1.shape, y_train1.shape, y_test1.shape)
     print(X_train2.shape, X_test2.shape, y_train2.shape, y_test2.shape)
     
+    config_wrapper = ConfigWrapper('config.yml')
     
-    td_exp = TwoDatasetsExperiment('mlp', e1)
+    td_exp = TwoDatasetsExperiment(
+        model_type='rf',
+        experiment_data=e1,
+        config=config_wrapper,
+        wandb_logger=False
+    )
     td_exp.prepare()
-    res = td_exp.run()
+    run_status = td_exp.run()
+    results = td_exp.get_results()
+    print(results)
+    print(results.get_all_results())
     
-    for k, v in res['experiment'].items():
-        if k not in ['original_instance', 'base_counterfactual', 'robust_counterfactual']:
-            print(k, v, np.mean(v))
+  
         
