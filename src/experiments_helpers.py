@@ -267,10 +267,10 @@ class TwoDatasetsExperiment(ExperimentBase):
             dice_cf = get_dice_counterfactuals(
                 dice_exp=explainer,
                 query_instance=orig_x,
-                total_CFs=1,
+                total_CFs=10,
                 desired_class='opposite',
-                proximity_weight=2,
-                diversity_weight=0.5,
+                proximity_weight=1.0,
+                diversity_weight=1.0,
             )
             generation_time = time.time() - start_time # Get the generation time in seconds
             
@@ -421,7 +421,7 @@ if __name__ == '__main__':
     
     e1 = TwoSamplesOneDatasetExperimentData(
         dataset, 
-        random_state=22,
+        random_state=122,
         one_hot_encode=True,
         standardize='minmax'
         )
