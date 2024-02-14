@@ -43,7 +43,15 @@ class ConfigWrapper:
         Returns:
             Any: Configuration setting value corresponding to the key.
         """
-        return self.config.get(key)
+        if key in self.config:
+            return self.config[key]
+        else:
+            # Go through the entire configuration to find the key
+            for _, value in self.config.items():
+                if isinstance(value, dict):
+                    if key in value:
+                        return value[key]
+        return None
 
     def get_entire_config(self) -> Dict[str, Any]:
         """

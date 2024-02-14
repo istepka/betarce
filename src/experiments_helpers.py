@@ -1,3 +1,6 @@
+import os 
+print(os.getcwd())
+
 from collections import defaultdict
 import numpy as np
 import pandas as pd
@@ -14,6 +17,8 @@ from scikit_models import load_model, scikit_predict_proba_fn, train_model, save
 from dice_wrapper import get_dice_explainer, get_dice_counterfactuals
 from robx import robx_algorithm, counterfactual_stability
 from config_wrapper import ConfigWrapper
+from explainers.base_explainer import BaseExplainer
+from explainers.dice_explainer import DiceExplainer
 
 class ExperimentDataBase: 
     def __init__(self) -> None:
@@ -89,22 +94,22 @@ class TwoSamplesOneDatasetExperimentData(ExperimentDataBase):
         
         dataset1, dataset2 = self.__create_datasets()
         
-        preprocessor1 = DatasetPreprocessor(dataset1,
+        self.preprocessor1 = DatasetPreprocessor(dataset1,
                                             standardize_data=self.standardize,
                                             one_hot=self.one_hot_encode,
                                             random_state=self.random_state,
                                             split=0.8
         )
         
-        preprocessor2 = DatasetPreprocessor(dataset2,
+        self.preprocessor2 = DatasetPreprocessor(dataset2,
                                             standardize_data=self.standardize,
                                             one_hot=self.one_hot_encode,
                                             random_state=self.random_state,
                                             split=0.8
         )
         
-        X_train1, X_test1, y_train1, y_test1 = preprocessor1.get_data()
-        X_train2, X_test2, y_train2, y_test2 = preprocessor2.get_data()
+        X_train1, X_test1, y_train1, y_test1 = self.preprocessor1.get_data()
+        X_train2, X_test2, y_train2, y_test2 = self.preprocessor2.get_data()
         
         return (X_train1, X_test1, y_train1, y_test1), (X_train2, X_test2, y_train2, y_test2)
 
@@ -161,6 +166,36 @@ class ExperimentResults:
     def __repr__(self) -> str:
         return self.__str__()
     
+    def pretty_print(self) -> None:
+        print(self.__str__())
+        print('Metrics:')
+        for k, v in self.results.items():
+            print(f'{k}: {self.get_mean_for_metric(k):.2f} (std: {self.get_std_for_metric(k):.2f})')
+            
+    def pretty_print_robust_vs_base(self) -> None:
+        print(self.__str__())
+        print('#' * 30 + ' Metrics ' + '#' * 30)
+        # robust_metrics = [k for k in self.results.keys() if 'robust' in k]
+        r_2 = [k for k in self.results.keys() if 'robust' in k and '2' in k]
+        r_1 = [k for k in self.results.keys() if 'robust' in k and '2' not in k]
+        # base_metrics = [k for k in self.results.keys() if 'robust' not in k]
+        b_2 = [k for k in self.results.keys() if 'robust' not in k and '2' in k]
+        b_1 = [k for k in self.results.keys() if 'robust' not in k and '2' not in k]
+        print('-' * 25 + ' Base metrics ' + '-' * 25)
+        for k in b_1:
+            print(f'{k}: {self.get_mean_for_metric(k):.2f} (std: {self.get_std_for_metric(k):.2f})')
+        print('-' * 25 + ' Base metrics 2 ' + '-' * 25)
+        for k in b_2:
+            print(f'{k}: {self.get_mean_for_metric(k):.2f} (std: {self.get_std_for_metric(k):.2f})')
+        print('-' * 25 + ' Robust metrics ' + '-' * 25)
+        for k in r_1:
+            print(f'{k}: {self.get_mean_for_metric(k):.2f} (std: {self.get_std_for_metric(k):.2f})')
+        print('-' * 25 + ' Robust metrics 2 ' + '-' * 25)
+        for k in r_2:
+            print(f'{k}: {self.get_mean_for_metric(k):.2f} (std: {self.get_std_for_metric(k):.2f})')
+        print('#' * 80)
+           
+    
 class ExperimentBase:
     def run(self) -> None:
         raise NotImplementedError('Method not implemented.')
@@ -214,8 +249,7 @@ class TwoDatasetsExperiment(ExperimentBase):
         
         self.log_artifact('accuracy_model1', self.acc1)
         self.log_artifact('accuracy_model2', self.acc2)
-        
-    
+           
     def run(self, base_cf_method: str = 'dice') -> bool:
         
         # 1) Generate counterfactual examples for all test samples of the first model
@@ -240,37 +274,51 @@ class TwoDatasetsExperiment(ExperimentBase):
             'cf_counterfactual_stability': np.nan
         }
         
-        
         X_train_w_target = X_train.copy()
         X_train_w_target[self.target_column] = y_train
+        X_train_w_target = X_train_w_target.reset_index(drop=True).copy()
+        
+        # categorical_columns = self.experiment_data.preprocessor1.transformed_features
+        # tmp = self.experiment_data.preprocessor1.inverse_one_hot_encode(X_train[categorical_columns])
+        # original_order = self.experiment_data.dataset.get_original_features()
+        # categorical_features = [f for f in original_order if f not in self.continuous_features and f != self.target_column]
+        # co = pd.concat( [pd.DataFrame(tmp, columns=categorical_features), X_train[self.continuous_features]], axis=1)
+        # X_train_w_target = co
+        # X_train_w_target[self.target_column] = y_train
+        # X_train_w_target = X_train_w_target.reset_index(drop=True).copy()
+        # # sort columns
+        # X_train_w_target = X_train_w_target[original_order]
+        # print(X_train_w_target.head())
+        # exit()
+        
         # Set up the explainer
         if base_cf_method == 'dice':
-            explainer = get_dice_explainer(
+            explainer = DiceExplainer(
                 dataset=X_train_w_target,
                 model=model,
                 outcome_name=self.target_column,
-                continous_features=X_train.columns.tolist(),
-                dice_method='kdtree',
-                # feature_encoding='ohe-min-max'
+                continous_features=self.continuous_features
+            )
+            explainer.prep(
+                dice_method='random',
+                feature_encoding=None
             )
         else:
-            raise ValueError('base_cf_method must be "dice"')
-        
+            raise ValueError('base_cf_method must be "dice"') 
             
         warnings.filterwarnings('ignore', category=UserWarning)
         for j in tqdm(range(len(X_test)), total=len(X_test)):
             
             orig_x = X_test[j:j+1] # Get the instance to be explained pd.DataFrame
-            orig_y = model.predict(orig_x)[0] # Get the label of the instance, as we rely on the model not on the ground truth
+            orig_y = int(model.predict(orig_x)[0]) # Get the label of the instance, as we rely on the model not on the ground truth
             
             start_time = time.time()
-            dice_cf = get_dice_counterfactuals(
-                dice_exp=explainer,
+            dice_cf = explainer.generate(
                 query_instance=orig_x,
-                total_CFs=10,
-                desired_class='opposite',
-                proximity_weight=1.0,
-                diversity_weight=1.0,
+                total_CFs=1,
+                desired_class= 1 - orig_y,
+                proximity_weight=0.5,
+                diversity_weight=1.0
             )
             generation_time = time.time() - start_time # Get the generation time in seconds
             
@@ -391,7 +439,7 @@ class TwoDatasetsExperiment(ExperimentBase):
         '''
         
         cf_label = model.predict(cf.reshape(1, -1))[0]
-        validity = int(cf_label) == 1 - cf_desired_class
+        validity = int(cf_label) == cf_desired_class
         proximityL1 = np.sum(np.abs(x - cf))
         lof = lof_model.score_samples(cf.reshape(1, -1))[0]
         cf_counterfactual_stability = counterfactual_stability(
@@ -417,6 +465,7 @@ class TwoDatasetsExperiment(ExperimentBase):
         
 
 if __name__ == '__main__':
+    
     dataset = Dataset('german')
     
     e1 = TwoSamplesOneDatasetExperimentData(
@@ -436,6 +485,8 @@ if __name__ == '__main__':
     
     config_wrapper = ConfigWrapper('config.yml')
     
+    np.random.seed(config_wrapper.get_config_by_key('random_state'))
+    
     td_exp = TwoDatasetsExperiment(
         model_type='rf',
         experiment_data=e1,
@@ -445,8 +496,7 @@ if __name__ == '__main__':
     td_exp.prepare()
     run_status = td_exp.run()
     results = td_exp.get_results()
-    print(results)
-    print(results.get_all_results())
+    results.pretty_print_robust_vs_base()
     
   
         

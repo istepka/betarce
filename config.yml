@@ -20,6 +20,6 @@ rf:
   max_depth: 10
   
 robXHparams:
-  tau: 0.6
-  variance: 0.1
+  tau: 0.7
+  variance: 0.01
   N: 1000

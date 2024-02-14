@@ -132,6 +132,24 @@ class Dataset:
                 - the continuous columns (list[str])
             '''
             return self.continuous_columns
+        
+        def get_categorical_columns(self) -> list[str]:
+            '''
+            Get the categorical columns.
+            
+            Returns:
+                - the categorical columns (list[str])
+            '''
+            return self.categorical_columns
+        
+        def get_original_features(self) -> list[str]:
+            '''
+            Get the original features.
+            
+            Returns:
+                - the original features (list[str])
+            '''
+            return self.raw_df.columns.tolist()
 
 class DatasetPreprocessor:
     
@@ -244,6 +262,8 @@ class DatasetPreprocessor:
         X_transformed = self.encoder.transform(X[categorical_columns])
         X_transformed_features = self.encoder.get_feature_names_out(categorical_columns)
         X_transformed = pd.DataFrame(X_transformed, columns=X_transformed_features)
+        
+        self.transformed_features = X_transformed_features
         
         return X_transformed
     
