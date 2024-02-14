@@ -77,7 +77,8 @@ class DiceExplainer(BaseExplainer):
             - diversity_weight: the diversity weight (float)
         '''
         
-        assert self.prep_done, 'prep() must be called before generate()'
+        if not self.prep_done:
+            raise ValueError('prep() method must be called first')
         
         explanations_object = self.dice_exp.generate_counterfactuals(
             query_instances=query_instance,
@@ -87,5 +88,7 @@ class DiceExplainer(BaseExplainer):
             diversity_weight=diversity_weight,
             )
         
-        return explanations_object.cf_examples_list
+        final_cf = explanations_object.cf_examples_list[0].final_cfs_df.to_numpy()[0][:-1]
+        
+        return final_cf
         

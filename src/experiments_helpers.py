@@ -11,14 +11,14 @@ import time
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.metrics import accuracy_score
 import warnings
+import joblib
 
 from create_data_examples import DatasetPreprocessor, Dataset
 from scikit_models import load_model, scikit_predict_proba_fn, train_model, save_model
 from dice_wrapper import get_dice_explainer, get_dice_counterfactuals
 from robx import robx_algorithm, counterfactual_stability
 from config_wrapper import ConfigWrapper
-from explainers.base_explainer import BaseExplainer
-from explainers.dice_explainer import DiceExplainer
+from explainers import BaseExplainer, DiceExplainer, AlibiWachter
 
 class ExperimentDataBase: 
     def __init__(self) -> None:
@@ -115,7 +115,7 @@ class TwoSamplesOneDatasetExperimentData(ExperimentDataBase):
 
 class ExperimentResults:
     def __init__(self) -> None:
-        self.results = defaultdict(lambda: list())
+        self.results = defaultdict(list)
         self.artifacts = {}
     
     def add_metric(self, metric: str, value: float) -> None:
@@ -194,11 +194,32 @@ class ExperimentResults:
         for k in r_2:
             print(f'{k}: {self.get_mean_for_metric(k):.2f} (std: {self.get_std_for_metric(k):.2f})')
         print('#' * 80)
-           
-    
+        
+    def save_to_file(self, path: str) -> bool | None:
+        try:
+            with open(path, 'wb') as f:
+                joblib.dump(self, f)
+            return True
+        except Exception as e:
+            print(f'Error serializing results: {e}')
+            return None
+        
+    @staticmethod
+    def load_results_from_file(path: str) -> object | None:
+        try: 
+            with open(path, 'rb') as f:
+                return joblib.load(f)
+        except Exception as e:
+            print(f'Error loading results from file: {e}')
+            return None    
+
 class ExperimentBase:
     def run(self) -> None:
         raise NotImplementedError('Method not implemented.')
+
+    
+    
+    
 
 class TwoDatasetsExperiment(ExperimentBase):
     
@@ -278,33 +299,37 @@ class TwoDatasetsExperiment(ExperimentBase):
         X_train_w_target[self.target_column] = y_train
         X_train_w_target = X_train_w_target.reset_index(drop=True).copy()
         
-        # categorical_columns = self.experiment_data.preprocessor1.transformed_features
-        # tmp = self.experiment_data.preprocessor1.inverse_one_hot_encode(X_train[categorical_columns])
-        # original_order = self.experiment_data.dataset.get_original_features()
-        # categorical_features = [f for f in original_order if f not in self.continuous_features and f != self.target_column]
-        # co = pd.concat( [pd.DataFrame(tmp, columns=categorical_features), X_train[self.continuous_features]], axis=1)
-        # X_train_w_target = co
-        # X_train_w_target[self.target_column] = y_train
-        # X_train_w_target = X_train_w_target.reset_index(drop=True).copy()
-        # # sort columns
-        # X_train_w_target = X_train_w_target[original_order]
-        # print(X_train_w_target.head())
-        # exit()
-        
         # Set up the explainer
-        if base_cf_method == 'dice':
-            explainer = DiceExplainer(
-                dataset=X_train_w_target,
-                model=model,
-                outcome_name=self.target_column,
-                continous_features=self.continuous_features
-            )
-            explainer.prep(
-                dice_method='random',
-                feature_encoding=None
-            )
-        else:
-            raise ValueError('base_cf_method must be "dice"') 
+        match base_cf_method:
+            case 'dice':
+                explainer = DiceExplainer(
+                    dataset=X_train_w_target,
+                    model=model,
+                    outcome_name=self.target_column,
+                    continous_features=self.continuous_features
+                )
+                explainer.prep(
+                    dice_method='random',
+                    feature_encoding=None
+                )
+            case 'wachter':
+                explainer = AlibiWachter(
+                    model=model,
+                    dataset=X_train_w_target,
+                    outcome_name=self.target_column,
+                    continuous_features=self.continuous_features
+                )
+                shape = X_train.iloc[0:1].to_numpy().shape
+                assert len(shape) == 2, 'The shape of the query instance must be (1, n_features)'
+                
+                predict_fn_for_wachter = lambda x: model.predict_proba(x)
+                
+                explainer.prep(
+                    query_instance_shape=shape,
+                    pred_fn=predict_fn_for_wachter,
+                )
+            case _:
+                raise ValueError('base_cf_method must be either "dice" or "wachter"')
             
         warnings.filterwarnings('ignore', category=UserWarning)
         for j in tqdm(range(len(X_test)), total=len(X_test)):
@@ -313,23 +338,35 @@ class TwoDatasetsExperiment(ExperimentBase):
             orig_y = int(model.predict(orig_x)[0]) # Get the label of the instance, as we rely on the model not on the ground truth
             
             start_time = time.time()
-            dice_cf = explainer.generate(
-                query_instance=orig_x,
-                total_CFs=1,
-                desired_class= 1 - orig_y,
-                proximity_weight=0.5,
-                diversity_weight=1.0
-            )
+            try:
+                match base_cf_method:
+                    case 'dice':
+                        base_cf = explainer.generate(
+                            query_instance=orig_x,
+                            total_CFs=1,
+                            desired_class= 1 - orig_y,
+                            proximity_weight=0.5,
+                            diversity_weight=1.0
+                        )
+                    case 'wachter':
+                        base_cf = explainer.generate(
+                            query_instance=orig_x,
+                        )
+                    case _:
+                        raise ValueError('base_cf_method must be "dice" or "wachter"')       
+            except Exception as e:
+                base_cf = None
+                print(f'Error generating counterfactual: {e}')
             generation_time = time.time() - start_time # Get the generation time in seconds
             
             x_numpy = orig_x.to_numpy()[0]
             
-            if dice_cf is None:
+            if base_cf is None:
                 cf_numpy = None
                 metrics = empty_metrics.copy()
                 metrics_2 = empty_metrics.copy()
             else: 
-                cf_numpy = dice_cf[0].final_cfs_df.to_numpy()[0][:-1]
+                cf_numpy = base_cf
                 
                 metrics = self.calculate_metrics(
                     cf = cf_numpy,
@@ -364,14 +401,18 @@ class TwoDatasetsExperiment(ExperimentBase):
                 
             # ROBX PART      
             start_time = time.time()
-            robust_cf, _ = robx_algorithm(
-                X_train = X_train.to_numpy(),
-                predict_class_proba_fn = predict_fn,
-                start_counterfactual = cf_numpy,
-                tau = self.robXHparams['tau'],
-                variance = self.robXHparams['variance'],
-                N = self.robXHparams['N'],
-            )
+            try:
+                robust_cf, _ = robx_algorithm(
+                    X_train = X_train.to_numpy(),
+                    predict_class_proba_fn = predict_fn,
+                    start_counterfactual = cf_numpy,
+                    tau = self.robXHparams['tau'],
+                    variance = self.robXHparams['variance'],
+                    N = self.robXHparams['N'],
+                )
+            except Exception as e:
+                robust_cf = None
+                print(f'Error generating robust counterfactual: {e}')
             rob_generation_time = time.time() - start_time # Get the generation time in seconds
             
             if robust_cf is None:
@@ -486,6 +527,7 @@ if __name__ == '__main__':
     config_wrapper = ConfigWrapper('config.yml')
     
     np.random.seed(config_wrapper.get_config_by_key('random_state'))
+    results_dir = config_wrapper.get_config_by_key('result_path')
     
     td_exp = TwoDatasetsExperiment(
         model_type='rf',
@@ -494,9 +536,12 @@ if __name__ == '__main__':
         wandb_logger=False
     )
     td_exp.prepare()
-    run_status = td_exp.run()
+    run_status = td_exp.run(
+        base_cf_method='dice'
+    )
     results = td_exp.get_results()
     results.pretty_print_robust_vs_base()
+    results.save_to_file(f'{results_dir}/two_datasets_experiment_results.joblib')
     
   
         
