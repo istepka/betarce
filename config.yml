@@ -14,12 +14,17 @@ mlp:
   max_iter: 1000
   verbose: true
   early_stopping: true
+  random_state: 3456
 
 rf:
   n_estimators: 100
   max_depth: 10
+  random_state: 3456
   
 robXHparams:
   tau: 0.7
   variance: 0.01
   N: 1000
+
+experiment:
+  classification_threshold: 0.5
