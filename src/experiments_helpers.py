@@ -14,7 +14,7 @@ import warnings
 import joblib
 
 from create_data_examples import DatasetPreprocessor, Dataset
-from scikit_models import load_model, scikit_predict_proba_fn, train_model, save_model
+from scikit_models import load_model, scikit_predict_proba_fn, train_model, save_model, train_calibrated_model
 from dice_wrapper import get_dice_explainer, get_dice_counterfactuals
 from robx import robx_algorithm, counterfactual_stability
 from config_wrapper import ConfigWrapper
@@ -217,10 +217,6 @@ class ExperimentBase:
     def run(self) -> None:
         raise NotImplementedError('Method not implemented.')
 
-    
-    
-    
-
 class TwoDatasetsExperiment(ExperimentBase):
     
     def __init__(self, 
@@ -228,16 +224,21 @@ class TwoDatasetsExperiment(ExperimentBase):
                  experiment_data: TwoSamplesOneDatasetExperimentData,
                  config: ConfigWrapper | None = None,
                  wandb_logger: bool = False,
+                 custom_experiment_name: str | None = None
                  ) -> None:
         super().__init__()
         
         self.model_type = model_type
         self.config = config
+        self.custom_experiment_name = custom_experiment_name \
+            if custom_experiment_name is not None else 'TwoDatasetsExperiment'
         
         self.experiment_data = experiment_data  
         self.wandb_logger = wandb_logger
         self.target_column = experiment_data.dataset.get_target_column()
         self.continuous_features = experiment_data.dataset.get_continuous_columns()
+        
+        self.class_threshold = self.config.get_config_by_key('classification_threshold')
         
         s1, s2 = self.experiment_data.create()
         self.X_train1, self.X_test1, self.y_train1, self.y_test1 = s1
@@ -247,7 +248,17 @@ class TwoDatasetsExperiment(ExperimentBase):
         
         self.results = ExperimentResults()
     
-    def prepare(self) -> None: 
+    def prepare(self, 
+            calibrate: bool = False,
+            calibrate_method: str = 'isotonic'
+        ) -> None: 
+        '''
+        Prepares the experiment by training the models and calculating the accuracy.
+        
+        Parameters:
+            - calibrate: (bool) Whether to calibrate the models.
+            - calibrate_method: (str) The calibration method. Either 'isotonic' or 'sigmoid'.
+        '''
         # Fit two models on the two samples  
         if self.model_type == 'mlp':
             hparams = self.config.get_config_by_key('mlp')
@@ -258,11 +269,16 @@ class TwoDatasetsExperiment(ExperimentBase):
         
         print(self.X_train1.head())
             
-        self.model1 = train_model(self.model_type, self.X_train1, self.y_train1, hparams=hparams)
+        if calibrate:
+            self.model1 = train_calibrated_model(self.model_type, self.X_train1, self.y_train1, 
+                                                 base_model_hparams=hparams, calibration_method=calibrate_method)
+        else:
+            self.model1 = train_model(self.model_type, self.X_train1, self.y_train1, hparams=hparams)
+            
         self.model2 = train_model(self.model_type, self.X_train2, self.y_train2, hparams=hparams)
         
-        save_model(self.model1, f'models/{self.model_type}_sample1_TwoDatasetsExperiment.joblib')
-        save_model(self.model2, f'models/{self.model_type}_sample2_TwoDatasetsExperiment.joblib')
+        save_model(self.model1, f'models/{self.custom_experiment_name}_sample1.joblib')
+        save_model(self.model2, f'models/{self.custom_experiment_name}_sample2.joblib')
         
         # Calculate the accuracy of the models
         self.acc1 = accuracy_score(self.y_test1, self.model1.predict(self.X_test1))
@@ -271,8 +287,17 @@ class TwoDatasetsExperiment(ExperimentBase):
         self.log_artifact('accuracy_model1', self.acc1)
         self.log_artifact('accuracy_model2', self.acc2)
            
-    def run(self, base_cf_method: str = 'dice') -> bool:
+    def run(self, 
+            base_cf_method: str = 'dice',
+            stop_after: int | None = None
+        ) -> bool:
+        '''
+        Runs the experiment.
         
+        Parameters:
+            - base_cf_method: (str) The method to be used for generating counterfactuals. Either 'dice' or 'wachter'.
+            - stop_after: (int) The number of iterations to run the experiment. If None, runs for all test samples.
+        '''
         # 1) Generate counterfactual examples for all test samples of the first model
         X_train = self.X_train1
         X_test = self.X_test1
@@ -347,8 +372,7 @@ class TwoDatasetsExperiment(ExperimentBase):
                             query_instance=orig_x,
                             total_CFs=1,
                             desired_class= 1 - orig_y,
-                            proximity_weight=0.5,
-                            diversity_weight=1.0
+                            classification_threshold=self.class_threshold,
                         )
                     case 'wachter':
                         base_cf = explainer.generate(
@@ -452,7 +476,8 @@ class TwoDatasetsExperiment(ExperimentBase):
             self.results.add_artifact('robust_counterfactual', robust_cf)
             self.results.add_metric('robust_generation_time', rob_generation_time)
             
-            if j == 3: # WARNING: REMOVE THIS LINE AFTER TESTING
+            if stop_after and j >= stop_after:
+                print(f'Stopping after {stop_after} iterations.')
                 break
             
         return True
@@ -481,7 +506,7 @@ class TwoDatasetsExperiment(ExperimentBase):
             - dict: The metrics.
         '''
         
-        cf_label = model.predict(cf.reshape(1, -1))[0]
+        cf_label = predict_fn(cf)[0] > self.class_threshold
         validity = int(cf_label) == cf_desired_class
         proximityL1 = np.sum(np.abs(x - cf))
         lof = lof_model.score_samples(cf.reshape(1, -1))[0]
@@ -531,19 +556,74 @@ if __name__ == '__main__':
     np.random.seed(config_wrapper.get_config_by_key('random_state'))
     results_dir = config_wrapper.get_config_by_key('result_path')
     
-    td_exp = TwoDatasetsExperiment(
-        model_type='rf',
-        experiment_data=e1,
-        config=config_wrapper,
-        wandb_logger=False
-    )
-    td_exp.prepare()
-    run_status = td_exp.run(
-        base_cf_method='dice'
-    )
-    results = td_exp.get_results()
-    results.pretty_print_robust_vs_base()
-    results.save_to_file(f'{results_dir}/two_datasets_experiment_results.joblib')
+    experiments = [
+        {
+            'model_type': 'mlp',
+            'base_cf_method': 'dice',
+            'calibrate': False,
+            'calibrate_method': None,
+            'custom_experiment_name': 'mlp_base'
+        },
+        {
+            'model_type': 'mlp',
+            'base_cf_method': 'dice',
+            'calibrate': True,
+            'calibrate_method': 'isotonic',
+            'custom_experiment_name': 'mlp_isotonic'
+        },
+        {
+            'model_type': 'mlp',
+            'base_cf_method': 'dice',
+            'calibrate': True,
+            'calibrate_method': 'sigmoid',
+            'custom_experiment_name': 'mlp_sigmoid'
+        }
+    ]
     
-  
+    
+    def __run_experiment(exp_config: dict, rep: int):
+        _exp = deepcopy(exp_config)
+        _exp['custom_experiment_name'] = f"{_exp['custom_experiment_name']}_{rep}"
         
+        td_exp = TwoDatasetsExperiment(
+            model_type=_exp['model_type'],
+            experiment_data=e1,
+            config=config_wrapper,
+            wandb_logger=False,
+            custom_experiment_name=_exp['custom_experiment_name']
+        )
+        
+        td_exp.prepare(
+            calibrate=_exp['calibrate'],
+            calibrate_method=_exp['calibrate_method']
+        )
+        
+        run_status = td_exp.run(
+            base_cf_method=_exp['base_cf_method'],
+            stop_after=None
+        )
+        
+        results = td_exp.get_results()
+        results.save_to_file(f'{results_dir}/{_exp["custom_experiment_name"]}.joblib')
+        
+    
+    import multiprocessing as mp
+    
+    
+    for exp_config in experiments:
+        
+        processes = []
+        
+        for rep in range(3):
+            
+            p = mp.Process(target=__run_experiment, args=(exp_config, rep))
+            p.start()
+            processes.append(p)
+            
+        for p in processes:
+            p.join()
+            
+    print('All experiments finished.')
+    
+    
+            
