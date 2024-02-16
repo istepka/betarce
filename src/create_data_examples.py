@@ -157,7 +157,7 @@ class DatasetPreprocessor:
                 dataset: Dataset,
                 split: float = 0.8, 
                 random_state: int = 0, 
-                stratify: bool = False, 
+                stratify: bool = True, 
                 standardize_data: str = 'minmax',
                 one_hot: bool = False,
                 binarize_y: bool = True

@@ -64,7 +64,7 @@ class DiceExplainer(BaseExplainer):
             total_CFs: int = 1,
             desired_class: str = 'opposite',
             proximity_weight: float = 0.2,
-            diversity_weight: float = 0.1,
+            diversity_weight: float = 0.05,
             classification_threshold: float = 0.5,
             random_seed: int = 123,
         ) -> pd.DataFrame:
@@ -91,6 +91,7 @@ class DiceExplainer(BaseExplainer):
             proximity_weight=proximity_weight,
             diversity_weight=diversity_weight,
             stopping_threshold=classification_threshold,
+            sparsity_weight=0.05,
             random_seed=random_seed,
             )
         

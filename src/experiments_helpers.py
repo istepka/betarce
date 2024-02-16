@@ -98,14 +98,14 @@ class TwoSamplesOneDatasetExperimentData(ExperimentDataBase):
                                             standardize_data=self.standardize,
                                             one_hot=self.one_hot_encode,
                                             random_state=self.random_state,
-                                            split=0.8
+                                            split=0.85
         )
         
         self.preprocessor2 = DatasetPreprocessor(dataset2,
                                             standardize_data=self.standardize,
                                             one_hot=self.one_hot_encode,
                                             random_state=self.random_state,
-                                            split=0.8
+                                            split=0.85
         )
         
         X_train1, X_test1, y_train1, y_test1 = self.preprocessor1.get_data()
@@ -619,7 +619,7 @@ if __name__ == '__main__':
     for exp_config in experiments:
         
         processes = []
-        for rep in range(5):
+        for rep in range(10):
             
             p = mp.Process(target=__run_experiment, args=(exp_config, rep))
             p.start()

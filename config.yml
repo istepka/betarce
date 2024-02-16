@@ -1,28 +1,28 @@
 general:
   data_path: data/
   model_path: models/
-  result_path: results/
+  result_path: results2/
   log_path: logs/
-  random_state: 3456
+  random_state: 345
   logging_level: INFO
 
 mlp:
-  hidden_layer_sizes: [100, 100]
+  hidden_layer_sizes: [100, 100, 100]
   activation: relu
   solver: adam
   learning_rate_init: 0.01
   max_iter: 1000
   verbose: true
   early_stopping: true
-  random_state: 3456
+  random_state: 345
 
 rf:
   n_estimators: 100
   max_depth: 10
-  random_state: 3456
+  random_state: 345
   
 robXHparams:
-  tau: 0.7
+  tau: 0.6
   variance: 0.01
   N: 1000
 
