@@ -313,6 +313,8 @@ class TwoDatasetsExperiment(ExperimentBase):
                     feature_encoding=None
                 )
             case 'wachter':
+                import tensorflow as tf
+                tf.compat.v1.disable_eager_execution()
                 explainer = AlibiWachter(
                     model=model,
                     dataset=X_train_w_target,
