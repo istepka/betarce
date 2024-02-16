@@ -59,7 +59,7 @@ def train_calibrated_model(
         assert calibration_method in ['isotonic', 'sigmoid'], 'calibration_method must be either isotonic or sigmoid'
         assert base_model.upper() in ['MLP', 'RF'], 'base_model must be either MLP or RF'
         
-        X_train, X_cal, y_train, y_cal = train_test_split(X, y, test_size=0.3, random_state=random_state)
+        # X_train, X_cal, y_train, y_cal = train_test_split(X, y, test_size=0.3, random_state=random_state)
         
         match base_model.upper():
             case 'MLP':
@@ -69,12 +69,12 @@ def train_calibrated_model(
             case _:
                 raise ValueError('model must be either MLP or RF')
         
-        base_model.fit(X_train, y_train)
+        # base_model.fit(X_train, y_train)
         
-        model_isotonic = CalibratedClassifierCV(base_model, cv='prefit', method=calibration_method)
-        model_isotonic.fit(X_cal, y_cal)
+        model_isotonic = CalibratedClassifierCV(base_model, cv=3, method=calibration_method)
+        model_isotonic.fit(X, y)
         
-        return base_model
+        return model_isotonic
 
 def save_model(model: object, path: str) -> None:
     '''

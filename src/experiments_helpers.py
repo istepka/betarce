@@ -268,6 +268,7 @@ class TwoDatasetsExperiment(ExperimentBase):
             raise ValueError('model_type must be either "mlp" or "rf"')
         
         print(self.X_train1.head())
+        print(hparams)
             
         if calibrate:
             self.model1 = train_calibrated_model(self.model_type, self.X_train1, self.y_train1, 
@@ -533,24 +534,6 @@ class TwoDatasetsExperiment(ExperimentBase):
         
 
 if __name__ == '__main__':
-    
-    dataset = Dataset('german')
-    
-    e1 = TwoSamplesOneDatasetExperimentData(
-        dataset, 
-        random_state=122,
-        one_hot_encode=True,
-        standardize='minmax'
-        )
-    
-    sample1, sample2 = e1.create()
-    
-    X_train1, X_test1, y_train1, y_test1 = sample1
-    X_train2, X_test2, y_train2, y_test2 = sample2
-    
-    print(X_train1.shape, X_test1.shape, y_train1.shape, y_test1.shape)
-    print(X_train2.shape, X_test2.shape, y_train2.shape, y_test2.shape)
-    
     config_wrapper = ConfigWrapper('config.yml')
     
     np.random.seed(config_wrapper.get_config_by_key('random_state'))
@@ -569,14 +552,14 @@ if __name__ == '__main__':
             'base_cf_method': 'dice',
             'calibrate': True,
             'calibrate_method': 'isotonic',
-            'custom_experiment_name': 'mlp_isotonic'
+            'custom_experiment_name': 'mlp_isotonic-cv'
         },
         {
             'model_type': 'mlp',
             'base_cf_method': 'dice',
             'calibrate': True,
             'calibrate_method': 'sigmoid',
-            'custom_experiment_name': 'mlp_sigmoid'
+            'custom_experiment_name': 'mlp_sigmoid-cv'
         }
     ]
     
@@ -585,10 +568,33 @@ if __name__ == '__main__':
         _exp = deepcopy(exp_config)
         _exp['custom_experiment_name'] = f"{_exp['custom_experiment_name']}_{rep}"
         
+        # Set the random state for reproducibility, by adding the rep number to the seed
+        _config_wrapper = config_wrapper.copy()
+        seed = _config_wrapper.get_config_by_key('random_state') + rep
+        seed = int(seed)
+        _config_wrapper.set_config_by_key('random_state', seed)
+        
+        dataset = Dataset('german')
+        
+        e1 = TwoSamplesOneDatasetExperimentData(
+            dataset, 
+            random_state=seed,
+            one_hot_encode=True,
+            standardize='minmax'
+            )
+        
+        sample1, sample2 = e1.create()
+        
+        X_train1, X_test1, y_train1, y_test1 = sample1
+        X_train2, X_test2, y_train2, y_test2 = sample2
+        
+        print(X_train1.shape, X_test1.shape, y_train1.shape, y_test1.shape)
+        print(X_train2.shape, X_test2.shape, y_train2.shape, y_test2.shape)
+        
         td_exp = TwoDatasetsExperiment(
             model_type=_exp['model_type'],
             experiment_data=e1,
-            config=config_wrapper,
+            config=_config_wrapper,
             wandb_logger=False,
             custom_experiment_name=_exp['custom_experiment_name']
         )
@@ -613,8 +619,7 @@ if __name__ == '__main__':
     for exp_config in experiments:
         
         processes = []
-        
-        for rep in range(3):
+        for rep in range(5):
             
             p = mp.Process(target=__run_experiment, args=(exp_config, rep))
             p.start()

@@ -9,6 +9,7 @@ class ConfigWrapper:
         Args:
             config_file (str): Path to the YAML configuration file.
         """
+        self.config_file = config_file
         with open(config_file, 'r') as file:
             self.config = yaml.safe_load(file)
 
@@ -61,6 +62,34 @@ class ConfigWrapper:
             dict: Entire configuration settings.
         """
         return self.config
+    
+    def set_config_by_key(self, key: str, value: Any) -> None:
+        """
+        Set configuration setting by key.
+
+        Args:
+            key (str): Key of the configuration setting.
+            value (Any): Value to set for the configuration setting.
+        """
+        if key in self.config:
+            self.config[key] = value
+        else:
+            # Go through the entire configuration to find the key
+            for _, v in self.config.items():
+                if isinstance(v, dict):
+                    if key in v:
+                        v[key] = value
+        return None
+    
+    def copy(self):
+        """
+        Copy the ConfigWrapper object.
+
+        Returns:
+            ConfigWrapper: Copied ConfigWrapper object.
+        """
+        return ConfigWrapper(self.config_file)
+    
 
 if __name__ == '__main__':
     # Example usage
