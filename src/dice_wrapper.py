@@ -43,8 +43,10 @@ def get_dice_counterfactuals(
     query_instance: dict,
     total_CFs: int = 1,
     desired_class: str = 'opposite',
-    proximity_weight: float = 0.5,
-    diversity_weight: float = 1.0,
+    proximity_weight: float = 0.2,
+    diversity_weight: float = 0.01,
+    classification_threshold: float = 0.5,
+    random_seed: int = 123,
     ) -> pd.DataFrame:
     '''
     Get counterfactuals using DiCE.
@@ -56,6 +58,8 @@ def get_dice_counterfactuals(
         - desired_class: the desired class (str) - 'opposite' or 'random'
         - proximity_weight: the proximity weight (float)
         - diversity_weight: the diversity weight (float)
+        - classification_threshold: the classification threshold (float)
+        - random_seed: the random seed (int)
     '''
     
     dice_exp = dice_exp
@@ -66,6 +70,8 @@ def get_dice_counterfactuals(
         desired_class=desired_class,
         proximity_weight=proximity_weight,
         diversity_weight=diversity_weight,
+        stopping_threshold=classification_threshold,
+        random_seed=random_seed
         )
     
     explanations = explanations_object.cf_examples_list 

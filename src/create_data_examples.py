@@ -157,7 +157,7 @@ class DatasetPreprocessor:
                 dataset: Dataset,
                 split: float = 0.8, 
                 random_state: int = 0, 
-                stratify: bool = False, 
+                stratify: bool = True, 
                 standardize_data: str = 'minmax',
                 one_hot: bool = False,
                 binarize_y: bool = True
@@ -323,8 +323,8 @@ class DatasetPreprocessor:
         '''
         X_train = self.X_train.values
         X_test = self.X_test.values
-        y_train = self.y_train.values
-        y_test = self.y_test.values
+        y_train = np.array(self.y_train)
+        y_test =  np.array(self.y_test)
         return X_train, X_test, y_train, y_test
 
 

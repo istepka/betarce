@@ -60,11 +60,13 @@ class DiceExplainer(BaseExplainer):
              
         
     def generate(self, 
-                 query_instance: np.ndarray | pd.DataFrame,
-                 total_CFs: int = 1,
-                 desired_class: str = 'opposite',
-                 proximity_weight: float = 0.5,
-                 diversity_weight: float = 1.0,
+            query_instance: np.ndarray | pd.DataFrame,
+            total_CFs: int = 1,
+            desired_class: str = 'opposite',
+            proximity_weight: float = 0.2,
+            diversity_weight: float = 0.05,
+            classification_threshold: float = 0.5,
+            random_seed: int = 123,
         ) -> pd.DataFrame:
         '''
         Generate counterfactuals using DiCE.
@@ -75,6 +77,8 @@ class DiceExplainer(BaseExplainer):
             - desired_class: the desired class (str) - 'opposite' or 'random'
             - proximity_weight: the proximity weight (float)
             - diversity_weight: the diversity weight (float)
+            - classification_threshold: the classification threshold (float)
+            - random_seed: the random seed (int)
         '''
         
         if not self.prep_done:
@@ -86,6 +90,9 @@ class DiceExplainer(BaseExplainer):
             desired_class=desired_class,
             proximity_weight=proximity_weight,
             diversity_weight=diversity_weight,
+            stopping_threshold=classification_threshold,
+            sparsity_weight=0.05,
+            random_seed=random_seed,
             )
         
         final_cf = explanations_object.cf_examples_list[0].final_cfs_df.to_numpy()[0][:-1]

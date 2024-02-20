@@ -1,5 +1,7 @@
 import pandas as pd
 import numpy as np
+from sklearn.calibration import CalibratedClassifierCV
+from sklearn.model_selection import train_test_split
 from sklearn.neural_network import MLPClassifier
 from sklearn.ensemble import RandomForestClassifier
 import joblib
@@ -34,6 +36,45 @@ def train_model(model: str,
     
     model.fit(X, y)
     return model
+
+def train_calibrated_model(
+            base_model: str,
+            X: np.ndarray, 
+            y: np.ndarray,
+            base_model_hparams: dict = None,
+            calibration_method: str = 'isotonic',
+            random_state: int = 123,
+        ) -> object:
+        '''
+        Train a calibrated model.
+        
+        Parameters:
+            - base_model: the base model (str) - 'MLP' or 'RF'
+            - X: the data (np.ndarray)
+            - y: the labels (np.ndarray)
+            - base_model_hparams: the hyperparameters for the base model (dict)
+            - calibration_method: the calibration method (str) - 'isotonic' or 'sigmoid'
+            - random_state: the random state (int)
+        '''
+        assert calibration_method in ['isotonic', 'sigmoid'], 'calibration_method must be either isotonic or sigmoid'
+        assert base_model.upper() in ['MLP', 'RF'], 'base_model must be either MLP or RF'
+        
+        # X_train, X_cal, y_train, y_cal = train_test_split(X, y, test_size=0.3, random_state=random_state)
+        
+        match base_model.upper():
+            case 'MLP':
+                base_model = MLPClassifier(**base_model_hparams)
+            case 'RF':
+                base_model = RandomForestClassifier(**base_model_hparams)
+            case _:
+                raise ValueError('model must be either MLP or RF')
+        
+        # base_model.fit(X_train, y_train)
+        
+        model_isotonic = CalibratedClassifierCV(base_model, cv=3, method=calibration_method)
+        model_isotonic.fit(X, y)
+        
+        return model_isotonic
 
 def save_model(model: object, path: str) -> None:
     '''
