@@ -275,7 +275,7 @@ def test_gs(sample: np.ndarray, pred_fn_crisp: callable, preprocessor: DatasetPr
         pred_fn_crisp=pred_fn_crisp,
     )
     
-    print(cf)
+    return cf
 
 def wrap_ensemble_crisp(sample: np.ndarray, models: list[nn.Module], method='avg-std') -> float:
     '''
@@ -301,12 +301,42 @@ def wrap_ensemble_crisp(sample: np.ndarray, models: list[nn.Module], method='avg
             raise ValueError(f'Unknown method: {method}')
 
 
-class Statrob:
-    def __init__(self) -> None:
-        pass
-    
+class StatrobGlobal:
+    def __init__(self, dataset: Dataset, preprocessor: DatasetPreprocessor, seed: int = 42) -> None:
  
-    
+        self.dataset = dataset
+        self.preprocessor = preprocessor
+        self.seed = seed
+        self.models: list[nn.Module] = []
+        
+    def fit(self, k_mlps: int = 32) -> None:
+        '''
+        Fit the ensemble of models
+        '''
+        X_train, X_test, y_train, y_test = self.preprocessor.get_numpy()
+        results = train_K_mlps_in_parallel(X_train, y_train, X_test, y_test, K=k_mlps, n_jobs=1)
+        self.models = [model for model, _, _, _, _ in results]
+        self.models = [model for sublist in self.models for model in sublist]
+        
+    def __function_to_optimize(self, x: np.ndarray, method='avg-std') -> float:
+        '''
+        Return the value of the function at a given point x
+        '''
+        print('X shape:', x.shape)
+        out = wrap_ensemble_crisp(x, self.models, method=method)[0]
+        return out
+        
+    def optimize(self, start_sample: np.ndarray, method: str = 'GS') -> np.ndarray:
+        '''
+        Optimize the input example
+        '''
+        if method == 'GS':
+            pred_fn_crisp = lambda x: self.__function_to_optimize(x, method='avg-std')
+            cf = test_gs(start_sample, pred_fn_crisp, self.preprocessor)
+        else:
+            raise ValueError(f'Unknown method: {method}')  
+        
+        return cf
     
     
 # UTILS
@@ -419,12 +449,6 @@ def plot_beta_on_original(preds: np.ndarray,
     
     plt.show()
           
-
-
-
-
-    
-    
     
 if __name__ == '__main__':
     if 'src' in os.getcwd():
@@ -441,61 +465,69 @@ if __name__ == '__main__':
     preprocessor = DatasetPreprocessor(dataset, one_hot=True, random_state=SEED)
 
     X_train, X_test, y_train, y_test = preprocessor.get_numpy()
+    
+    
+    statrob = StatrobGlobal(dataset, preprocessor, seed=SEED)
+    statrob.fit(k_mlps=32)
+    
+    start_sample = X_test[0:1]
+    cf = statrob.optimize(start_sample, method='GS')
+    print(f'Counterfactual: {cf}')
 
-    print(f'Shapes: X_train: {X_train.shape}, X_test: {X_test.shape}, y_train: {y_train.shape}, y_test: {y_test.shape}')
+    # print(f'Shapes: X_train: {X_train.shape}, X_test: {X_test.shape}, y_train: {y_train.shape}, y_test: {y_test.shape}')
     
-    results = train_K_mlps_in_parallel(X_train, y_train, X_test, y_test, K=32, n_jobs=1)
+    # results = train_K_mlps_in_parallel(X_train, y_train, X_test, y_test, K=32, n_jobs=1)
 
-    accuracies = [accuracy for _, accuracy, _, _, _ in results]
-    accuracies = np.array(accuracies).flatten()
-    print(f'Accuracies: {accuracies}')
-    models = [model for model, _, _, _, _ in results]
-    models = [model for sublist in models for model in sublist]
-    print(f'Number of models: {len(models)}')
+    # accuracies = [accuracy for _, accuracy, _, _, _ in results]
+    # accuracies = np.array(accuracies).flatten()
+    # print(f'Accuracies: {accuracies}')
+    # models = [model for model, _, _, _, _ in results]
+    # models = [model for sublist in models for model in sublist]
+    # print(f'Number of models: {len(models)}')
     
-    preds = ensemble_predict_proba(models, X_test)
-    print(preds.shape)
-    print(f'Ensemble Predictions: {preds[:, 7]}')
+    # preds = ensemble_predict_proba(models, X_test)
+    # print(preds.shape)
+    # print(f'Ensemble Predictions: {preds[:, 7]}')
     
-    example_preds = preds[:, 8]
-    plot_distribution_of_predictions(example_preds, save_dir='images/statrob')
+    # example_preds = preds[:, 8]
+    # plot_distribution_of_predictions(example_preds, save_dir='images/statrob')
         
-    print(example_preds)
+    # print(example_preds)
 
         
-    plot_grid_of_distribution_predictions(preds, save_dir='images/statrob')
+    # plot_grid_of_distribution_predictions(preds, save_dir='images/statrob')
     
-    s = preds[:, 4]
-    alpha, beta = estimate_beta_distribution(s, method='MLE')
+    # s = preds[:, 4]
+    # alpha, beta = estimate_beta_distribution(s, method='MLE')
 
-    alpha = np.clip(alpha, 0, 100)
-    beta = np.clip(beta, 0, 100)
+    # alpha = np.clip(alpha, 0, 100)
+    # beta = np.clip(beta, 0, 100)
 
 
-    print('Sample distribution')
-    plot_distribution_of_predictions(s)
-    print('Estimated Beta distribution')
-    plot_beta(alpha, beta)
+    # print('Sample distribution')
+    # plot_distribution_of_predictions(s)
+    # print('Estimated Beta distribution')
+    # plot_beta(alpha, beta)
     
 
-    plot_beta_on_original(s, alpha, beta)
+    # plot_beta_on_original(s, alpha, beta)
     
     
-    s_bstrapped = bootstrap(s)
-    binary_test_results = []
-    for _s in s_bstrapped:
-        res = test_with_CI(_s) 
-        binary_test_results.append(res)
-    binary_test_results = np.array(binary_test_results, dtype=int)
-    # Binom
-    n = len(binary_test_results)
-    successes = binary_test_results.sum() 
-    p =  successes / n
-    print(f'p: {p:.2f}, n: {n}')
+    # s_bstrapped = bootstrap(s)
+    # binary_test_results = []
+    # for _s in s_bstrapped:
+    #     res = test_with_CI(_s) 
+    #     binary_test_results.append(res)
+    # binary_test_results = np.array(binary_test_results, dtype=int)
+    # # Binom
+    # n = len(binary_test_results)
+    # successes = binary_test_results.sum() 
+    # p =  successes / n
+    # print(f'p: {p:.2f}, n: {n}')
 
-    test_res = scipy.stats.binomtest(successes, n, p=0.5, alternative='greater')
-    print(test_res)
+    # test_res = scipy.stats.binomtest(successes, n, p=0.5, alternative='greater')
+    # print(test_res)
     
     
-    pred_function_crisp = lambda x: wrap_ensemble_crisp(x, models, method='avg-std')
-    test_gs(X_test[5], pred_function_crisp, preprocessor)
+    # pred_function_crisp = lambda x: wrap_ensemble_crisp(x, models, method='avg-std')
+    # test_gs(X_test[5], pred_function_crisp, preprocessor)
