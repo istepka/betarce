@@ -1,3 +1,4 @@
+from sklearn.model_selection import train_test_split
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -22,21 +23,19 @@ warnings.filterwarnings('ignore', category=RuntimeWarning)
 class MLPClassifier(nn.Module):
     def __init__(self, 
                  input_dim: int, 
-                 output_dim: int, 
                  hidden_dims: list = [64, 64, 64],
                  activation: str = 'relu',
                  dropout: float = 0.0
         ) -> None:
         '''
         input_dim: int, input dimension
-        output_dim: int, output dimension
         hidden_dims: list, hidden layer dimensions
         activation: str, activation function
         dropout: float, dropout rate
         '''
         super(MLPClassifier, self).__init__()
         self.input_dim = input_dim
-        self.output_dim = output_dim
+        self.output_dim = 1
         self.hidden_dims = hidden_dims
         self.activation = activation
         self.dropout = dropout
@@ -59,18 +58,18 @@ class MLPClassifier(nn.Module):
                 self.layers.append(nn.Dropout(self.dropout))
             input_dim = hidden_dim
         self.layers.append(nn.Linear(input_dim, self.output_dim))
-        self.layers.append(nn.Softmax(dim=1))
+        self.layers.append(nn.Sigmoid())
         
     def forward(self, x):
         for layer in self.layers:
             x = layer(x)
-        return x
+        return x.flatten()
     
     def predict_proba(self, x):
-        return self.forward(x)
+        return self.forward(x).flatten()
     
-    def predict_crisp(self, x):
-        return torch.argmax(self.predict_proba(x), dim=1)
+    def predict_crisp(self, x, threshold=0.5):
+        return (self.predict_proba(x) > threshold).int()
     
     def fit(self, 
             X_train: Union[np.array, torch.Tensor],
@@ -86,14 +85,21 @@ class MLPClassifier(nn.Module):
         ) -> None:
         '''
         '''
-        criterion = nn.CrossEntropyLoss()
+        criterion = nn.BCELoss()
         optimizer = torch.optim.Adam(self.parameters(), lr=lr)
         
+        # Reshape y_train
+        if len(y_train.shape) == 2:
+            y_train = y_train.flatten
+            
+            if y_val is not None:
+                y_val = y_val.flatten()
+        
         X_train = array_to_tensor(X_train, device=device, dtype=torch.float32)
-        y_train = array_to_tensor(y_train, device=device, dtype=torch.long)
+        y_train = array_to_tensor(y_train, device=device, dtype=torch.float32)
         if X_val is not None:
             X_val = array_to_tensor(X_val, device=device, dtype=torch.float32)
-            y_val = array_to_tensor(y_val, device=device, dtype=torch.long)
+            y_val = array_to_tensor(y_val, device=device, dtype=torch.float32)
             
             
         for epoch in range(epochs):
@@ -164,7 +170,7 @@ def train_K_mlps(X_train, y_train, X_test, y_test, K: int = 5, evaluate: bool = 
         layers = np.random.randint(2, 5)
         dims = np.random.choice([16,24,32], size=layers)
         dropout = np.random.randint(0,3) / 10
-        mlp = MLPClassifier(input_dim=X_train.shape[1], output_dim=2, hidden_dims=dims, activation='relu', dropout=dropout)
+        mlp = MLPClassifier(input_dim=X_train.shape[1], hidden_dims=dims, activation='relu', dropout=dropout)
         mlp.fit(
             X_train, 
             y_train, 
@@ -208,7 +214,7 @@ def ensemble_predict_proba(models: list[nn.Module], X: Union[np.ndarray, torch.T
     predictions = []
     X_tensor = array_to_tensor(X)
     for model in models:
-        predictions.append(model.predict_proba(X_tensor).detach().numpy()[:, 1])
+        predictions.append(model.predict_proba(X_tensor).detach().numpy())
     predictions = np.array(predictions)
     return predictions
                     
@@ -259,7 +265,7 @@ def test_with_CI(sample: np.ndarray, confidence: float = 0.9, thresh: float = 0.
     left, right = scipy.stats.beta.interval(confidence, alpha, beta)
     return left > thresh
   
-def test_gs(sample: np.ndarray, pred_fn_crisp: callable, preprocessor: DatasetPreprocessor) -> bool:
+def test_gs(sample: np.ndarray, pred_fn_crisp: callable, preprocessor: DatasetPreprocessor) -> np.ndarray:
     
     sample = sample.reshape(1, -1)
     
@@ -273,11 +279,12 @@ def test_gs(sample: np.ndarray, pred_fn_crisp: callable, preprocessor: DatasetPr
         binary_cols=preprocessor.encoder.get_feature_names_out().tolist(),
         feature_order=preprocessor.X_train.columns.tolist(),
         pred_fn_crisp=pred_fn_crisp,
+        n_search_samples=100,
     )
     
     return cf
 
-def wrap_ensemble_crisp(sample: np.ndarray, models: list[nn.Module], method='avg-std') -> float:
+def wrap_ensemble_crisp(sample: np.ndarray, models: list[nn.Module], method='avg-std') -> Union[int, np.ndarray]:
     '''
     Wrap the ensemble prediction function to be used in the test_gs function.  
     Specifically, reduce the ensemble predictions to a single value.
@@ -302,12 +309,17 @@ def wrap_ensemble_crisp(sample: np.ndarray, models: list[nn.Module], method='avg
 
 
 class StatrobGlobal:
-    def __init__(self, dataset: Dataset, preprocessor: DatasetPreprocessor, seed: int = 42) -> None:
+    def __init__(self, dataset: Dataset, 
+                 preprocessor: DatasetPreprocessor, 
+                 blackbox: MLPClassifier,
+                 seed: int = 42
+        ) -> None:
  
         self.dataset = dataset
         self.preprocessor = preprocessor
         self.seed = seed
         self.models: list[nn.Module] = []
+        self.blackbox = blackbox
         
     def fit(self, k_mlps: int = 32) -> None:
         '''
@@ -318,25 +330,73 @@ class StatrobGlobal:
         self.models = [model for model, _, _, _, _ in results]
         self.models = [model for sublist in self.models for model in sublist]
         
-    def __function_to_optimize(self, x: np.ndarray, method='avg-std') -> float:
+    def __function_to_optimize(self, x: np.ndarray, target_class: int, method='avg-std') -> Union[int, np.ndarray]:
         '''
         Return the value of the function at a given point x
         '''
-        print('X shape:', x.shape)
-        out = wrap_ensemble_crisp(x, self.models, method=method)[0]
-        return out
         
-    def optimize(self, start_sample: np.ndarray, method: str = 'GS') -> np.ndarray:
+        # Optimized function
+        out = wrap_ensemble_crisp(x, self.models, method=method)
+        out = out if target_class == 1 else 1 - out
+        print(f'Out shape: {out.shape}')
+        
+        # Validity criterion
+        blackbox_preds = self.blackbox.predict_crisp(array_to_tensor(x)).numpy()
+        blackbox_preds = blackbox_preds if target_class == 1 else 1 - blackbox_preds
+        print(f'Blackbox prediction: {blackbox_preds.shape}')
+        
+        # Probabilistic outputs for beta CI test criterion
+        preds = ensemble_predict_proba(self.models, x)
+        preds = preds if target_class == 1 else 1 - preds
+        print(f'Preds shape: {preds.shape}')
+        
+        # Initialize results
+        results = out * blackbox_preds
+        
+        if preds.shape[1] > 1:
+            for i in range(preds.shape[1]):
+                passes = self.test_beta_credible_interval(preds[:, i], confidence=0.9, thresh=0.5)
+                # print(f'Passes: {passes}')
+                if not passes:
+                    results[i] = 0
+        else:
+            preds = preds.flatten()
+            passes = self.test_beta_credible_interval(preds, confidence=0.9, thresh=0.5)
+            # print(f'Passes: {passes}')
+            if not passes:
+                results = 0
+        
+
+        return results
+        
+    def optimize(self, start_sample: np.ndarray, target_class: int, method: str = 'GS') -> np.ndarray:
         '''
         Optimize the input example
         '''
+        
+        pred_fn_crisp = lambda x: self.__function_to_optimize(x, target_class = target_class, method='avg-std')
+            
+        
         if method == 'GS':
-            pred_fn_crisp = lambda x: self.__function_to_optimize(x, method='avg-std')
             cf = test_gs(start_sample, pred_fn_crisp, self.preprocessor)
         else:
             raise ValueError(f'Unknown method: {method}')  
         
+        # Posthoc check if the counterfactual is valid
+        preds = ensemble_predict_proba(self.models, cf.reshape(1, -1))
+        preds = preds if target_class == 1 else 1 - preds
+        
+        if not self.test_beta_credible_interval(preds, confidence=0.9, thresh=0.5):
+            print('Counterfactual is not valid!')
+        
         return cf
+    
+    def test_beta_credible_interval(self, sample: np.ndarray, confidence: float = 0.9, thresh: float = 0.5) -> bool:
+        '''
+        Test the beta distribution
+        '''
+        result = test_with_CI(sample, confidence, thresh)
+        return result
     
     
 # UTILS
@@ -466,12 +526,23 @@ if __name__ == '__main__':
 
     X_train, X_test, y_train, y_test = preprocessor.get_numpy()
     
+    blackbox = MLPClassifier(input_dim=X_train.shape[1], hidden_dims=[64, 64, 64], activation='relu', dropout=0.2)
+    X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.2, random_state=SEED)
+    blackbox.fit(X_train, y_train, X_val=X_val, y_val=y_val, epochs=30, lr=0.001, batch_size=32, verbose=True, early_stopping=True)
+    accuracy, recall, precision, f1 = blackbox.evaluate(X_test, y_test)
+    print(f'BLACKBOX: Accuracy: {accuracy:.2f}, Recall: {recall:.2f}, Precision: {precision:.2f}, F1: {f1:.2f}')
     
-    statrob = StatrobGlobal(dataset, preprocessor, seed=SEED)
+    
+    statrob = StatrobGlobal(dataset, preprocessor, blackbox=blackbox, seed=SEED)
     statrob.fit(k_mlps=32)
     
-    start_sample = X_test[0:1]
-    cf = statrob.optimize(start_sample, method='GS')
+    start_sample = X_test[1:2]
+    
+    target_class = blackbox.predict_crisp(array_to_tensor(start_sample)).item()
+    print(f'BLACKBOX Class: {target_class}')
+    cf = statrob.optimize(start_sample, target_class=1-target_class, method='GS')
+    cf = cf.reshape(1, -1)
+    print(f'Counterfactual class: {blackbox.predict_crisp(array_to_tensor(cf)).item()}')
     print(f'Counterfactual: {cf}')
 
     # print(f'Shapes: X_train: {X_train.shape}, X_test: {X_test.shape}, y_train: {y_train.shape}, y_test: {y_test.shape}')
