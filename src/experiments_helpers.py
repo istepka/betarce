@@ -14,11 +14,12 @@ import warnings
 import joblib
 
 from create_data_examples import DatasetPreprocessor, Dataset
-from scikit_models import load_model, scikit_predict_proba_fn, train_model, save_model, train_calibrated_model
+from scikit_models import load_model, scikit_predict_proba_fn, train_model, save_model, train_calibrated_model, scikit_predict_crisp_fn
 from dice_wrapper import get_dice_explainer, get_dice_counterfactuals
 from robx import robx_algorithm, counterfactual_stability
 from config_wrapper import ConfigWrapper
-from explainers import BaseExplainer, DiceExplainer, AlibiWachter
+from explainers import BaseExplainer, DiceExplainer, AlibiWachter, GrowingSpheresExplainer
+from statrob import StatrobGlobal
 
 class ExperimentDataBase: 
     def __init__(self) -> None:
@@ -244,6 +245,8 @@ class TwoDatasetsExperiment(ExperimentBase):
         self.X_train1, self.X_test1, self.y_train1, self.y_test1 = s1
         self.X_train2, self.X_test2, self.y_train2, self.y_test2 = s2
         
+        self.preprocessor = self.experiment_data.preprocessor1
+        
         self.robXHparams = config.get_model_config('robXHparams')
         
         self.results = ExperimentResults()
@@ -296,7 +299,7 @@ class TwoDatasetsExperiment(ExperimentBase):
         Runs the experiment.
         
         Parameters:
-            - base_cf_method: (str) The method to be used for generating counterfactuals. Either 'dice' or 'wachter'.
+            - base_cf_method: (str) The method to be used for generating counterfactuals. Either 'dice' or 'wachter' or 'gs'.
             - stop_after: (int) The number of iterations to run the experiment. If None, runs for all test samples.
         '''
         # 1) Generate counterfactual examples for all test samples of the first model
@@ -313,6 +316,8 @@ class TwoDatasetsExperiment(ExperimentBase):
         
         predict_fn = scikit_predict_proba_fn(model)
         predict_fn_2 = scikit_predict_proba_fn(self.model2)
+        predict_fn_crisp = scikit_predict_crisp_fn(model)
+        predict_fn_2_crisp = scikit_predict_crisp_fn(self.model2)
         
         empty_metrics = {
             'validity': np.nan,
@@ -356,8 +361,25 @@ class TwoDatasetsExperiment(ExperimentBase):
                     query_instance_shape=shape,
                     pred_fn=predict_fn_for_wachter,
                 )
+            case 'gs':
+                _gsconfig = self.config.get_config_by_key('statrobHparams')['growingSpheresHparams']
+                
+                explainer = GrowingSpheresExplainer(
+                    keys_mutable=self.preprocessor.X_train.columns.tolist(),
+                    keys_immutable=[],
+                    feature_order=self.preprocessor.X_train.columns.tolist(),
+                    binary_cols=self.preprocessor.encoder.get_feature_names_out().tolist(),
+                    continous_cols=self.preprocessor.continuous_columns,
+                    pred_fn_crisp=predict_fn_crisp,
+                    target_proba=_gsconfig['target_proba'],
+                    max_iter=_gsconfig['max_iter'],
+                    n_search_samples=_gsconfig['n_search_samples'],
+                    p_norm=_gsconfig['p_norm'],
+                    step=_gsconfig['step']
+                )    
+                explainer.prep()
             case _:
-                raise ValueError('base_cf_method must be either "dice" or "wachter"')
+                raise ValueError('base_cf_method must be either "dice" or "wachter" or "gs"')
             
         warnings.filterwarnings('ignore', category=UserWarning)
         for j in tqdm(range(len(X_test)), total=len(X_test)):
@@ -376,6 +398,10 @@ class TwoDatasetsExperiment(ExperimentBase):
                             classification_threshold=self.class_threshold,
                         )
                     case 'wachter':
+                        base_cf = explainer.generate(
+                            query_instance=orig_x,
+                        )
+                    case 'gs':
                         base_cf = explainer.generate(
                             query_instance=orig_x,
                         )
@@ -542,25 +568,25 @@ if __name__ == '__main__':
     experiments = [
         {
             'model_type': 'mlp',
-            'base_cf_method': 'dice',
+            'base_cf_method': 'gs',
             'calibrate': False,
             'calibrate_method': None,
             'custom_experiment_name': 'mlp_base'
         },
-        {
-            'model_type': 'mlp',
-            'base_cf_method': 'dice',
-            'calibrate': True,
-            'calibrate_method': 'isotonic',
-            'custom_experiment_name': 'mlp_isotonic-cv'
-        },
-        {
-            'model_type': 'mlp',
-            'base_cf_method': 'dice',
-            'calibrate': True,
-            'calibrate_method': 'sigmoid',
-            'custom_experiment_name': 'mlp_sigmoid-cv'
-        }
+        # {
+        #     'model_type': 'mlp',
+        #     'base_cf_method': 'dice',
+        #     'calibrate': True,
+        #     'calibrate_method': 'isotonic',
+        #     'custom_experiment_name': 'mlp_isotonic-cv'
+        # },
+        # {
+        #     'model_type': 'mlp',
+        #     'base_cf_method': 'dice',
+        #     'calibrate': True,
+        #     'calibrate_method': 'sigmoid',
+        #     'custom_experiment_name': 'mlp_sigmoid-cv'
+        # }
     ]
     
     
@@ -581,7 +607,7 @@ if __name__ == '__main__':
             random_state=seed,
             one_hot_encode=True,
             standardize='minmax'
-            )
+        )
         
         sample1, sample2 = e1.create()
         
@@ -606,7 +632,7 @@ if __name__ == '__main__':
         
         run_status = td_exp.run(
             base_cf_method=_exp['base_cf_method'],
-            stop_after=None
+            stop_after=10
         )
         
         results = td_exp.get_results()
@@ -619,7 +645,7 @@ if __name__ == '__main__':
     for exp_config in experiments:
         
         processes = []
-        for rep in range(10):
+        for rep in range(1):
             
             p = mp.Process(target=__run_experiment, args=(exp_config, rep))
             p.start()

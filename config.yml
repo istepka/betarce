@@ -14,17 +14,24 @@ mlp:
   max_iter: 1000
   verbose: true
   early_stopping: true
-  random_state: 345
 
 rf:
   n_estimators: 100
   max_depth: 10
-  random_state: 345
   
 robXHparams:
-  tau: 0.6
+  tau: 0.7
   variance: 0.01
   N: 1000
+
+statrobHparams:
+  k_mlps: 32
+  growingSpheresHparams:
+    max_iter: 100
+    n_search_samples: 100
+    p_norm: 2
+    step: 0.01
+    target_proba: 0.5
 
 experiment:
   classification_threshold: 0.5

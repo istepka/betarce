@@ -139,6 +139,16 @@ def scikit_predict_proba_fn(model: object) -> object:
     
     return lambda x: scikit_predict_proba(model, x)
 
+def scikit_predict_crisp_fn(model: object) -> object:
+    '''
+    Return a function that predicts the class.
+    
+    Parameters:
+        - model: the model (object)
+    '''
+    
+    return lambda x: model.predict(x)
+
 
 if __name__ == '__main__':
     from plot_helpers import plot_crisp_decision_boundary, plot_model_probabilites

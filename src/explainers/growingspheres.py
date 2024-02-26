@@ -163,7 +163,6 @@ class GrowingSpheresExplainer(BaseExplainer):
              continous_cols: list,
              pred_fn_crisp: callable,
              target_proba: float, 
-             target_class: int, 
              max_iter: int = 1000,
              n_search_samples: int = 1000, 
              p_norm: float = 2,
@@ -180,7 +179,6 @@ class GrowingSpheresExplainer(BaseExplainer):
             - continous_cols: the continuous columns (list)
             - pred_fn_crisp: the prediction function (callable)
             - target_proba: the target probability (float)
-            - target_class: the target
             - max_iter: the maximum number of iterations (int)
             - n_search_samples: the number of search samples (int)
             - p_norm: the norm (float)
@@ -194,7 +192,6 @@ class GrowingSpheresExplainer(BaseExplainer):
         self.continous_cols= continous_cols
         self.pred_fn = pred_fn_crisp
         self.target_proba = target_proba
-        self.target_class = target_class
         self.max_iter = max_iter
         self.p_norm = p_norm
         self.step = step
@@ -202,7 +199,14 @@ class GrowingSpheresExplainer(BaseExplainer):
 
         self.prep_done = True
         
-    def generate(self, query_instance: np.ndarray | pd.DataFrame):
+    def prep(self) -> None:
+        '''
+        Prepare the explainer.
+        '''
+        pass
+        
+    def generate(self, query_instance: np.ndarray | pd.DataFrame, 
+        ) -> np.ndarray:
         '''
         Generate the counterfactual.
 

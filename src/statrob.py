@@ -368,16 +368,31 @@ class StatrobGlobal:
 
         return results
         
-    def optimize(self, start_sample: np.ndarray, target_class: int, method: str = 'GS') -> np.ndarray:
+    def optimize(self, start_sample: np.ndarray, target_class: int, method: str = 'GS', opt_hparams: dict = None) -> np.ndarray:
         '''
         Optimize the input example
+        
+        Parameters:
+            - start_sample: np.ndarray, the input example
+            - target_class: int, the target class
+            - method: str, the optimization method
+            - opt_hparams: dict, the optimization hyperparameters. If None, use defaults defined in the method
         '''
         
         pred_fn_crisp = lambda x: self.__function_to_optimize(x, target_class = target_class, method='avg-std')
             
         
         if method == 'GS':
-            # cf = test_gs(start_sample, pred_fn_crisp, self.preprocessor)
+            
+            # Use hparams if provided, otherwise use defaults
+            if opt_hparams is None:
+                opt_hparams = {}
+            target_proba = opt_hparams['target_proba'] if 'target_proba' in opt_hparams else 0.5
+            max_iter = opt_hparams['max_iter'] if 'max_iter' in opt_hparams else 100
+            n_search_samples = opt_hparams['n_search_samples'] if 'n_search_samples' in opt_hparams else 100
+            p_norm = opt_hparams['p_norm'] if 'p_norm' in opt_hparams else 2
+            step = opt_hparams['step'] if 'step' in opt_hparams else 0.1
+            
             gs_explainer = GrowingSpheresExplainer(
                 keys_mutable=self.preprocessor.X_train.columns.tolist(),
                 keys_immutable=[],
@@ -385,12 +400,11 @@ class StatrobGlobal:
                 binary_cols=self.preprocessor.encoder.get_feature_names_out().tolist(),
                 continous_cols=self.preprocessor.continuous_columns,
                 pred_fn_crisp=pred_fn_crisp,
-                target_proba=0.5,
-                target_class=target_class,
-                max_iter=100,
-                n_search_samples=100,
-                p_norm=2,
-                step=0.01
+                target_proba=target_proba,
+                max_iter=max_iter,
+                n_search_samples=n_search_samples,
+                p_norm=p_norm,
+                step=step
             )
             cf = gs_explainer.generate(start_sample)
         else:
