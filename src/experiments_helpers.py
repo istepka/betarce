@@ -414,12 +414,13 @@ class TwoDatasetsExperiment(ExperimentBase):
             
             x_numpy = orig_x.to_numpy()[0]
             
-            if base_cf is None:
+            if base_cf is None or 'nan' in base_cf.astype(str):
                 cf_numpy = None
                 metrics = empty_metrics.copy()
                 metrics_2 = empty_metrics.copy()
             else: 
                 cf_numpy = base_cf
+                print(cf_numpy)
                 
                 metrics = self.calculate_metrics(
                     cf = cf_numpy,
@@ -600,7 +601,7 @@ if __name__ == '__main__':
         seed = int(seed)
         _config_wrapper.set_config_by_key('random_state', seed)
         
-        dataset = Dataset('german')
+        dataset = Dataset('fico')
         
         e1 = TwoSamplesOneDatasetExperimentData(
             dataset, 
