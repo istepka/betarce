@@ -14,7 +14,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 from create_data_examples import DatasetPreprocessor, Dataset
-from growingspheres import growing_spheres_search
+from explainers import growing_spheres_search, GrowingSpheresExplainer
 
 # Scipy screams some radom stuff
 warnings.filterwarnings('ignore', category=RuntimeWarning)
@@ -307,7 +307,6 @@ def wrap_ensemble_crisp(sample: np.ndarray, models: list[nn.Module], method='avg
         case _:
             raise ValueError(f'Unknown method: {method}')
 
-
 class StatrobGlobal:
     def __init__(self, dataset: Dataset, 
                  preprocessor: DatasetPreprocessor, 
@@ -378,7 +377,22 @@ class StatrobGlobal:
             
         
         if method == 'GS':
-            cf = test_gs(start_sample, pred_fn_crisp, self.preprocessor)
+            # cf = test_gs(start_sample, pred_fn_crisp, self.preprocessor)
+            gs_explainer = GrowingSpheresExplainer(
+                keys_mutable=self.preprocessor.X_train.columns.tolist(),
+                keys_immutable=[],
+                feature_order=self.preprocessor.X_train.columns.tolist(),
+                binary_cols=self.preprocessor.encoder.get_feature_names_out().tolist(),
+                continous_cols=self.preprocessor.continuous_columns,
+                pred_fn_crisp=pred_fn_crisp,
+                target_proba=0.5,
+                target_class=target_class,
+                max_iter=100,
+                n_search_samples=100,
+                p_norm=2,
+                step=0.01
+            )
+            cf = gs_explainer.generate(start_sample)
         else:
             raise ValueError(f'Unknown method: {method}')  
         
@@ -519,7 +533,6 @@ if __name__ == '__main__':
     torch.manual_seed(SEED)
     np.random.seed(SEED)
 
-
     dataset = Dataset('german')
 
     preprocessor = DatasetPreprocessor(dataset, one_hot=True, random_state=SEED)
@@ -531,7 +544,6 @@ if __name__ == '__main__':
     blackbox.fit(X_train, y_train, X_val=X_val, y_val=y_val, epochs=30, lr=0.001, batch_size=32, verbose=True, early_stopping=True)
     accuracy, recall, precision, f1 = blackbox.evaluate(X_test, y_test)
     print(f'BLACKBOX: Accuracy: {accuracy:.2f}, Recall: {recall:.2f}, Precision: {precision:.2f}, F1: {f1:.2f}')
-    
     
     statrob = StatrobGlobal(dataset, preprocessor, blackbox=blackbox, seed=SEED)
     statrob.fit(k_mlps=32)

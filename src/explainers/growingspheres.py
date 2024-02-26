@@ -3,6 +3,7 @@
 import numpy as np
 import pandas as pd
 from numpy import linalg as LA
+from .base_explainer import BaseExplainer
 
 def hyper_sphere_coordindates(n_search_samples, instance, high, low, p_norm=2):
 
@@ -34,7 +35,6 @@ def hyper_sphere_coordindates(n_search_samples, instance, high, low, p_norm=2):
     candidate_counterfactuals = instance + delta_instance
 
     return candidate_counterfactuals, dist
-
 
 def growing_spheres_search(
     instance,
@@ -153,3 +153,79 @@ def growing_spheres_search(
         high = low + step
 
     return candidate_counterfactual_star
+
+
+class GrowingSpheresExplainer(BaseExplainer):
+    def __init__(self, keys_mutable: list, 
+             keys_immutable: list, 
+             feature_order: list, 
+             binary_cols: list, 
+             continous_cols: list,
+             pred_fn_crisp: callable,
+             target_proba: float, 
+             target_class: int, 
+             max_iter: int = 1000,
+             n_search_samples: int = 1000, 
+             p_norm: float = 2,
+             step: float = 0.1
+        ) -> None:
+        '''
+        Prepare the Growing Spheres explainer.
+        
+        Parameters:
+            - keys_mutable: the mutable keys (list)
+            - keys_immutable: the immutable keys (list)
+            - feature_order: the feature order (list)
+            - binary_cols: the binary columns (list)
+            - continous_cols: the continuous columns (list)
+            - pred_fn_crisp: the prediction function (callable)
+            - target_proba: the target probability (float)
+            - target_class: the target
+            - max_iter: the maximum number of iterations (int)
+            - n_search_samples: the number of search samples (int)
+            - p_norm: the norm (float)
+            - step: the step (float)
+        '''
+        
+        self.keys_mutable = keys_mutable
+        self.keys_immutable = keys_immutable
+        self.feature_order = feature_order
+        self.binary_cols = binary_cols
+        self.continous_cols= continous_cols
+        self.pred_fn = pred_fn_crisp
+        self.target_proba = target_proba
+        self.target_class = target_class
+        self.max_iter = max_iter
+        self.p_norm = p_norm
+        self.step = step
+        self.n_search_samples = n_search_samples
+
+        self.prep_done = True
+        
+    def generate(self, query_instance: np.ndarray | pd.DataFrame):
+        '''
+        Generate the counterfactual.
+
+        Parameters:
+            - query_instance: the query instance (np.ndarray | pd.DataFrame)
+        '''
+        
+        assert self.prep_done, 'You must prepare the explainer first'
+        
+        if isinstance(query_instance, np.ndarray):
+            query_instance = pd.DataFrame(query_instance, columns=self.feature_order)
+            
+        return growing_spheres_search(
+            instance=query_instance,
+            keys_mutable=self.keys_mutable,
+            keys_immutable=self.keys_immutable,
+            continuous_cols=self.continous_cols,
+            binary_cols=self.binary_cols,
+            feature_order=self.feature_order,
+            pred_fn_crisp=self.pred_fn,
+            n_search_samples=self.n_search_samples,
+            p_norm=self.p_norm,
+            step=self.step,
+            max_iter=self.max_iter,
+        )
+        
