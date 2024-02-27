@@ -252,6 +252,8 @@ class TwoDatasetsExperiment(ExperimentBase):
         self.robXHparams = config.get_model_config('robXHparams')
         
         self.results = ExperimentResults()
+        
+        self.prep_done = False
     
     def prepare(self, 
             calibrate: bool = False,
@@ -284,16 +286,26 @@ class TwoDatasetsExperiment(ExperimentBase):
             
         if 'sklearn' in self.model_type:
             print('Training sklearn model')
+            _model_type = self.model_type.split('-')[0].upper()
             if calibrate:
-                self.model1 = train_calibrated_model(self.model_type, self.X_train1, self.y_train1, 
+                self.model1 = train_calibrated_model(_model_type, self.X_train1, self.y_train1, 
                                                     base_model_hparams=hparams, calibration_method=calibrate_method)
             else:
-                self.model1 = train_model(self.model_type, self.X_train1, self.y_train1, hparams=hparams)
+                self.model1 = train_model(_model_type, self.X_train1, self.y_train1, hparams=hparams)
                 
-            self.model2 = train_model(self.model_type, self.X_train2, self.y_train2, hparams=hparams)
+            self.model2 = train_model(_model_type, self.X_train2, self.y_train2, hparams=hparams)
             
             save_model(self.model1, f'models/{self.custom_experiment_name}_sample1.joblib')
             save_model(self.model2, f'models/{self.custom_experiment_name}_sample2.joblib')
+            
+            
+            self.predict_fn_1 = scikit_predict_proba_fn(self.model1)
+            self.predict_fn_1_crisp = scikit_predict_crisp_fn(self.model1)
+            
+            self.predict_fn_2 = scikit_predict_proba_fn(self.model2)
+            self.predict_fn_2_crisp = scikit_predict_crisp_fn(self.model2)
+           
+            
         elif 'torch' in self.model_type:
             print('Training torch model')
             self.model1 = MLPClassifier(
@@ -301,6 +313,7 @@ class TwoDatasetsExperiment(ExperimentBase):
                 hidden_dims=hparams['hidden_dims'],
                 activation=hparams['activation'],
                 dropout=hparams['dropout'],
+                seed=self.config.get_config_by_key('random_state')
             )
                 
             X_train1, X_val1, y_train1, y_val1 = train_test_split(self.X_train1, self.y_train1, test_size=0.15, random_state=42)
@@ -313,17 +326,48 @@ class TwoDatasetsExperiment(ExperimentBase):
                 verbose=hparams['verbose'],
                 early_stopping=hparams['early_stopping'],
             )
+            self.predict_fn_1 = lambda x: self.model1.predict_proba(x)
+            self.predict_fn_1_crisp = lambda x: self.model1.predict_crisp(x, threshold=self.class_threshold)
+            
+            self.model2 = MLPClassifier(
+                input_dim=self.X_train2.shape[1],
+                hidden_dims=hparams['hidden_dims'],
+                activation=hparams['activation'],
+                dropout=hparams['dropout'],
+                seed=self.config.get_config_by_key('random_state')
+            )
+            
+            X_train2, X_val2, y_train2, y_val2 = train_test_split(self.X_train2, self.y_train2, test_size=0.15, random_state=42)
+            self.model2.fit(
+                X_train2, y_train2,
+                X_val=X_val2, y_val=y_val2,
+                epochs=hparams['epochs'],
+                lr=hparams['lr'],
+                batch_size=hparams['batch_size'],
+                verbose=hparams['verbose'],
+                early_stopping=hparams['early_stopping'],
+            )
+            
+            self.predict_fn_2 = lambda x: self.model2.predict_proba(x)
+            self.predict_fn_2_crisp = lambda x: self.model2.predict_crisp(x, threshold=self.class_threshold)
             
         else:
             raise ValueError('model_type unsupported')
             
         
         # Calculate the accuracy of the models
-        self.acc1 = accuracy_score(self.y_test1, self.model1.predict(self.X_test1))
-        self.acc2 = accuracy_score(self.y_test2, self.model2.predict(self.X_test2))
+        self.acc1 = accuracy_score(self.y_test1, self.predict_fn_1_crisp(self.X_test1))
+        self.acc2 = accuracy_score(self.y_test2, self.predict_fn_2_crisp(self.X_test2))
         
         self.log_artifact('accuracy_model1', self.acc1)
         self.log_artifact('accuracy_model2', self.acc2)
+         
+        self.lof_model = LocalOutlierFactor(n_neighbors=50, novelty=True, p=1)
+        self.lof_model.fit(self.X_train1.to_numpy()) # Fit the LOF model without column names
+        self.lof_model2 = LocalOutlierFactor(n_neighbors=50, novelty=True, p=1)
+        self.lof_model2.fit(self.X_train2.to_numpy())
+        
+        self.prep_done = True
            
     def run(self, 
             robust_method: str, 
@@ -340,6 +384,7 @@ class TwoDatasetsExperiment(ExperimentBase):
         '''
         assert robust_method in ['robx', 'statrob'], 'robust_method must be either "robx" or "statrob"'
         assert base_cf_method in ['dice', 'wachter', 'gs'], 'base_cf_method must be either "dice" or "wachter" or "gs"'
+        assert self.prep_done, 'prepare() must be called before run()'
         
         # 1) Generate counterfactual examples for all test samples of the first model
         X_train = self.X_train1
@@ -348,15 +393,7 @@ class TwoDatasetsExperiment(ExperimentBase):
         y_test = self.y_test1
         model = self.model1
         
-        lof_model = LocalOutlierFactor(n_neighbors=50, novelty=True, p=1)
-        lof_model.fit(X_train.to_numpy()) # Fit the LOF model without column names
-        lof_model2 = LocalOutlierFactor(n_neighbors=50, novelty=True, p=1)
-        lof_model2.fit(self.X_train2.to_numpy())
         
-        predict_fn = scikit_predict_proba_fn(model)
-        predict_fn_2 = scikit_predict_proba_fn(self.model2)
-        predict_fn_crisp = scikit_predict_crisp_fn(model)
-        predict_fn_2_crisp = scikit_predict_crisp_fn(self.model2)
         
         empty_metrics = {
             'validity': np.nan,
@@ -409,7 +446,7 @@ class TwoDatasetsExperiment(ExperimentBase):
                     feature_order=self.preprocessor.X_train.columns.tolist(),
                     binary_cols=self.preprocessor.encoder.get_feature_names_out().tolist(),
                     continous_cols=self.preprocessor.continuous_columns,
-                    pred_fn_crisp=predict_fn_crisp,
+                    pred_fn_crisp=self.predict_fn_1_crisp,
                     target_proba=_gsconfig['target_proba'],
                     max_iter=_gsconfig['max_iter'],
                     n_search_samples=_gsconfig['n_search_samples'],
@@ -440,7 +477,7 @@ class TwoDatasetsExperiment(ExperimentBase):
         for j in tqdm(range(len(X_test)), total=len(X_test)):
             
             orig_x = X_test[j:j+1] # Get the instance to be explained pd.DataFrame
-            orig_y = int(model.predict(orig_x)[0]) # Get the label of the instance, as we rely on the model not on the ground truth
+            orig_y = int(self.predict_fn_1_crisp(orig_x)) # Get the label of the instance, as we rely on the model not on the ground truth
             
             start_time = time.time()
             try:
@@ -482,8 +519,8 @@ class TwoDatasetsExperiment(ExperimentBase):
                     cf_desired_class=1 - orig_y,
                     x = x_numpy,
                     model = model,
-                    lof_model = lof_model,
-                    predict_fn = predict_fn,
+                    lof_model = self.lof_model,
+                    predict_fn = self.predict_fn_1,
                     robXHparams = self.robXHparams
                 )
                   
@@ -492,8 +529,8 @@ class TwoDatasetsExperiment(ExperimentBase):
                     cf_desired_class=1 - orig_y,
                     x = x_numpy,
                     model = self.model2,
-                    lof_model = lof_model2,
-                    predict_fn = predict_fn_2,
+                    lof_model = self.lof_model2,
+                    predict_fn = self.predict_fn_2,
                     robXHparams = self.robXHparams
                 )    
                 
@@ -515,7 +552,7 @@ class TwoDatasetsExperiment(ExperimentBase):
                     case 'robx':
                         robust_cf, _ = robx_algorithm(
                             X_train = X_train.to_numpy(),
-                            predict_class_proba_fn = predict_fn,
+                            predict_class_proba_fn = self.predict_fn_1,
                             start_counterfactual = cf_numpy,
                             tau = self.robXHparams['tau'],
                             variance = self.robXHparams['variance'],
@@ -545,8 +582,8 @@ class TwoDatasetsExperiment(ExperimentBase):
                     cf_desired_class=cf_desired_class,
                     x = x_numpy,
                     model = model,
-                    lof_model = lof_model,
-                    predict_fn = predict_fn,
+                    lof_model = self.lof_model,
+                    predict_fn = self.predict_fn_1,
                     robXHparams = self.robXHparams
                 )
             
@@ -555,8 +592,8 @@ class TwoDatasetsExperiment(ExperimentBase):
                     cf_desired_class=cf_desired_class,
                     x = x_numpy,
                     model = self.model2,
-                    lof_model = lof_model2,
-                    predict_fn = predict_fn_2,
+                    lof_model = self.lof_model2,
+                    predict_fn = self.predict_fn_2,
                     robXHparams = self.robXHparams
                 )
                 
@@ -633,7 +670,7 @@ if __name__ == '__main__':
     
     experiments = [
         {
-            'model_type': 'mlp-sklearn',
+            'model_type': 'mlp-torch',
             'base_cf_method': 'gs',
             'calibrate': False,
             'calibrate_method': None,

@@ -20,7 +20,7 @@ rf-sklearn:
   max_depth: 10
 
 mlp-torch:
-  hidden_layer_sizes: [100, 100, 100]
+  hidden_dims: [100, 100, 100]
   activation: relu
   lr: 0.01
   dropout: 0.2

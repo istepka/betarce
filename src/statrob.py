@@ -25,7 +25,8 @@ class MLPClassifier(nn.Module):
                  input_dim: int, 
                  hidden_dims: list = [64, 64, 64],
                  activation: str = 'relu',
-                 dropout: float = 0.0
+                 dropout: float = 0.0,
+                 seed: int = 42
         ) -> None:
         '''
         input_dim: int, input dimension
@@ -40,6 +41,9 @@ class MLPClassifier(nn.Module):
         self.activation = activation
         self.dropout = dropout
         self.layers = nn.ModuleList()
+        
+        torch.manual_seed(seed)
+        
         self.build_model()
 
     def build_model(self):
@@ -66,7 +70,8 @@ class MLPClassifier(nn.Module):
         return x.flatten()
     
     def predict_proba(self, x):
-        return self.forward(x).flatten()
+        x = array_to_tensor(x)
+        return self.forward(x).flatten().detach().numpy()
     
     def predict_crisp(self, x, threshold=0.5):
         x = array_to_tensor(x)
@@ -95,6 +100,18 @@ class MLPClassifier(nn.Module):
             
             if y_val is not None:
                 y_val = y_val.flatten()
+                
+        # If dataframes, convert to numpy
+        if isinstance(X_train, pd.DataFrame):
+            X_train = X_train.values
+        if isinstance(y_train, pd.Series):
+            y_train = y_train.values
+        if X_val is not None:
+            if isinstance(X_val, pd.DataFrame):
+                X_val = X_val.values
+            if isinstance(y_val, pd.Series):
+                y_val = y_val.values
+                
         
         X_train = array_to_tensor(X_train, device=device, dtype=torch.float32)
         y_train = array_to_tensor(y_train, device=device, dtype=torch.float32)
@@ -219,7 +236,7 @@ def ensemble_predict_proba(models: list[nn.Module], X: Union[np.ndarray, torch.T
     predictions = np.array(predictions)
     return predictions
                     
-def array_to_tensor(X: Union[np.array, torch.Tensor], 
+def array_to_tensor(X: Union[np.array, torch.Tensor, pd.DataFrame], 
                     device: str = 'cpu',
                     dtype: torch.dtype = torch.float32
     ) -> torch.Tensor:
@@ -230,6 +247,8 @@ def array_to_tensor(X: Union[np.array, torch.Tensor],
     '''
     if isinstance(X, np.ndarray):
         X = torch.tensor(X, dtype=dtype)
+    elif isinstance(X, pd.DataFrame):
+        X = torch.tensor(X.values, dtype=dtype)
         
     return X.to(device)
     
