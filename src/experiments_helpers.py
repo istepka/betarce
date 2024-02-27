@@ -1,4 +1,6 @@
-import os 
+import os
+
+from sklearn.model_selection import train_test_split 
 print(os.getcwd())
 
 from collections import defaultdict
@@ -19,7 +21,7 @@ from dice_wrapper import get_dice_explainer, get_dice_counterfactuals
 from robx import robx_algorithm, counterfactual_stability
 from config_wrapper import ConfigWrapper
 from explainers import BaseExplainer, DiceExplainer, AlibiWachter, GrowingSpheresExplainer
-from statrob import StatrobGlobal
+from statrob import StatrobGlobal, MLPClassifier
 
 class ExperimentDataBase: 
     def __init__(self) -> None:
@@ -263,26 +265,58 @@ class TwoDatasetsExperiment(ExperimentBase):
             - calibrate_method: (str) The calibration method. Either 'isotonic' or 'sigmoid'.
         '''
         # Fit two models on the two samples  
-        if self.model_type == 'mlp':
-            hparams = self.config.get_config_by_key('mlp')
-        elif self.model_type == 'rf':
-            hparams = self.config.get_config_by_key('rf')
+        if self.model_type == 'mlp-sklearn':
+            hparams = self.config.get_config_by_key('mlp-sklearn')
+        elif self.model_type == 'rf-sklearn':
+            hparams = self.config.get_config_by_key('rf-sklearn')
+        elif self.model_type == 'mlp-torch':
+            hparams = self.config.get_config_by_key('mlp-torch')
+            
+            if calibrate:
+                raise ValueError('Calibration is not supported for PyTorch models.')
+            
         else:
-            raise ValueError('model_type must be either "mlp" or "rf"')
+            raise ValueError('model_type must be either "mlp-sklearn" or "rf-sklearn"')
         
         print(self.X_train1.head())
         print(hparams)
             
-        if calibrate:
-            self.model1 = train_calibrated_model(self.model_type, self.X_train1, self.y_train1, 
-                                                 base_model_hparams=hparams, calibration_method=calibrate_method)
-        else:
-            self.model1 = train_model(self.model_type, self.X_train1, self.y_train1, hparams=hparams)
             
-        self.model2 = train_model(self.model_type, self.X_train2, self.y_train2, hparams=hparams)
-        
-        save_model(self.model1, f'models/{self.custom_experiment_name}_sample1.joblib')
-        save_model(self.model2, f'models/{self.custom_experiment_name}_sample2.joblib')
+        if 'sklearn' in self.model_type:
+            print('Training sklearn model')
+            if calibrate:
+                self.model1 = train_calibrated_model(self.model_type, self.X_train1, self.y_train1, 
+                                                    base_model_hparams=hparams, calibration_method=calibrate_method)
+            else:
+                self.model1 = train_model(self.model_type, self.X_train1, self.y_train1, hparams=hparams)
+                
+            self.model2 = train_model(self.model_type, self.X_train2, self.y_train2, hparams=hparams)
+            
+            save_model(self.model1, f'models/{self.custom_experiment_name}_sample1.joblib')
+            save_model(self.model2, f'models/{self.custom_experiment_name}_sample2.joblib')
+        elif 'torch' in self.model_type:
+            print('Training torch model')
+            self.model1 = MLPClassifier(
+                input_dim=self.X_train1.shape[1],
+                hidden_dims=hparams['hidden_dims'],
+                activation=hparams['activation'],
+                dropout=hparams['dropout'],
+            )
+                
+            X_train1, X_val1, y_train1, y_val1 = train_test_split(self.X_train1, self.y_train1, test_size=0.15, random_state=42)
+            self.model1.fit(
+                X_train1, y_train1,
+                X_val=X_val1, y_val=y_val1,
+                epochs=hparams['epochs'],
+                lr=hparams['lr'],
+                batch_size=hparams['batch_size'],
+                verbose=hparams['verbose'],
+                early_stopping=hparams['early_stopping'],
+            )
+            
+        else:
+            raise ValueError('model_type unsupported')
+            
         
         # Calculate the accuracy of the models
         self.acc1 = accuracy_score(self.y_test1, self.model1.predict(self.X_test1))
@@ -292,16 +326,21 @@ class TwoDatasetsExperiment(ExperimentBase):
         self.log_artifact('accuracy_model2', self.acc2)
            
     def run(self, 
-            base_cf_method: str = 'dice',
+            robust_method: str, 
+            base_cf_method: str,
             stop_after: int | None = None
         ) -> bool:
         '''
         Runs the experiment.
         
         Parameters:
+            - robust_method: (str) The method to be used for generating robust counterfactuals. Either 'robx' or 'statrob'.
             - base_cf_method: (str) The method to be used for generating counterfactuals. Either 'dice' or 'wachter' or 'gs'.
             - stop_after: (int) The number of iterations to run the experiment. If None, runs for all test samples.
         '''
+        assert robust_method in ['robx', 'statrob'], 'robust_method must be either "robx" or "statrob"'
+        assert base_cf_method in ['dice', 'wachter', 'gs'], 'base_cf_method must be either "dice" or "wachter" or "gs"'
+        
         # 1) Generate counterfactual examples for all test samples of the first model
         X_train = self.X_train1
         X_test = self.X_test1
@@ -330,7 +369,7 @@ class TwoDatasetsExperiment(ExperimentBase):
         X_train_w_target[self.target_column] = y_train
         X_train_w_target = X_train_w_target.reset_index(drop=True).copy()
         
-        # Set up the explainer
+        # Set up the base explainer method
         match base_cf_method:
             case 'dice':
                 explainer = DiceExplainer(
@@ -380,6 +419,22 @@ class TwoDatasetsExperiment(ExperimentBase):
                 explainer.prep()
             case _:
                 raise ValueError('base_cf_method must be either "dice" or "wachter" or "gs"')
+         
+        # Set up robust explainer
+        match robust_method:
+            case 'robx':
+                pass
+            case 'statrob':
+                statrobExplainer = StatrobGlobal(
+                    dataset=X_train.to_numpy(),
+                    preprocessor=self.preprocessor,
+                    blackbox=model,
+                    seed=self.config.get_config_by_key('random_state'),
+                )
+                
+                statrobExplainer.fit(k_mlps=self.config.get_config_by_key('statrobHparams')['k_mlps'])
+            case _:
+                raise ValueError('robust_method must be either "robx" or "statrob"')
             
         warnings.filterwarnings('ignore', category=UserWarning)
         for j in tqdm(range(len(X_test)), total=len(X_test)):
@@ -456,14 +511,24 @@ class TwoDatasetsExperiment(ExperimentBase):
             # ROBX PART      
             start_time = time.time()
             try:
-                robust_cf, _ = robx_algorithm(
-                    X_train = X_train.to_numpy(),
-                    predict_class_proba_fn = predict_fn,
-                    start_counterfactual = cf_numpy,
-                    tau = self.robXHparams['tau'],
-                    variance = self.robXHparams['variance'],
-                    N = self.robXHparams['N'],
-                )
+                match robust_method:
+                    case 'robx':
+                        robust_cf, _ = robx_algorithm(
+                            X_train = X_train.to_numpy(),
+                            predict_class_proba_fn = predict_fn,
+                            start_counterfactual = cf_numpy,
+                            tau = self.robXHparams['tau'],
+                            variance = self.robXHparams['variance'],
+                            N = self.robXHparams['N'],
+                        )
+                    case 'statrob':
+                        robust_cf = statrobExplainer.optimize(
+                            start_sample=cf_numpy.reshape(1, -1),
+                            target_class=1 - orig_y,
+                            method=self.config.get_config_by_key('statrobHparams')['method'],
+                            opt_hparams=self.config.get_config_by_key('statrobHparams')['growingSpheresHparams']
+                        )
+                        
             except Exception as e:
                 robust_cf = None
                 print(f'Error generating robust counterfactual: {e}')
@@ -568,11 +633,12 @@ if __name__ == '__main__':
     
     experiments = [
         {
-            'model_type': 'mlp',
+            'model_type': 'mlp-sklearn',
             'base_cf_method': 'gs',
             'calibrate': False,
             'calibrate_method': None,
-            'custom_experiment_name': 'mlp_base'
+            'custom_experiment_name': 'mlp_base',
+            'robust_method': 'statrob'
         },
         # {
         #     'model_type': 'mlp',
@@ -632,6 +698,7 @@ if __name__ == '__main__':
         )
         
         run_status = td_exp.run(
+            robust_method=_exp['robust_method'],
             base_cf_method=_exp['base_cf_method'],
             stop_after=10
         )

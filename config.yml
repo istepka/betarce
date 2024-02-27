@@ -6,7 +6,7 @@ general:
   random_state: 345
   logging_level: INFO
 
-mlp:
+mlp-sklearn:
   hidden_layer_sizes: [100, 100, 100]
   activation: relu
   solver: adam
@@ -15,9 +15,21 @@ mlp:
   verbose: true
   early_stopping: true
 
-rf:
+rf-sklearn:
   n_estimators: 100
   max_depth: 10
+
+mlp-torch:
+  hidden_layer_sizes: [100, 100, 100]
+  activation: relu
+  lr: 0.01
+  dropout: 0.2
+  max_iter: 1000
+  epochs: 100
+  batch_size: 128
+  verbose: true
+  early_stopping: true
+
   
 robXHparams:
   tau: 0.7
@@ -26,11 +38,12 @@ robXHparams:
 
 statrobHparams:
   k_mlps: 32
+  method: GS
   growingSpheresHparams:
     max_iter: 100
     n_search_samples: 100
     p_norm: 2
-    step: 0.01
+    step: 0.05
     target_proba: 0.5
 
 experiment:

@@ -7,6 +7,14 @@ from sklearn.ensemble import RandomForestClassifier
 import joblib
 import os
 
+class ScikitMLPClassifier(MLPClassifier):
+    def predict_crisp(self, X):
+        return self.predict(X)
+    
+class ScikitRandomForestClassifier(RandomForestClassifier):
+    def predict_crisp(self, X):
+        return self.predict(X)
+
 
 def train_model(model: str,
                   X: np.ndarray, 
@@ -25,9 +33,9 @@ def train_model(model: str,
     
     match model.upper():
         case 'MLP':
-            model = MLPClassifier()
+            model = ScikitMLPClassifier()
         case 'RF':
-            model = RandomForestClassifier()
+            model = ScikitRandomForestClassifier()
         case _:
             raise ValueError('model must be either MLP or RF')
         
@@ -63,9 +71,9 @@ def train_calibrated_model(
         
         match base_model.upper():
             case 'MLP':
-                base_model = MLPClassifier(**base_model_hparams)
+                base_model = ScikitMLPClassifier(**base_model_hparams)
             case 'RF':
-                base_model = RandomForestClassifier(**base_model_hparams)
+                base_model = ScikitRandomForestClassifier(**base_model_hparams)
             case _:
                 raise ValueError('model must be either MLP or RF')
         
@@ -117,17 +125,17 @@ def scikit_predict_proba(model: object, x: np.ndarray) -> np.ndarray:
         _x = x
     # print(_x, _x.shape)
         
-    if isinstance(model, MLPClassifier):
+    if isinstance(model, ScikitMLPClassifier):
         return model.predict_proba(_x)[:, 1]
     
-    if isinstance(model, RandomForestClassifier):
+    if isinstance(model, ScikitRandomForestClassifier):
         return model.predict_proba(_x)[:, 1]
     
     # if model is from scikit learn still ok 
     if hasattr(model, 'predict_proba'):
         return model.predict_proba(_x)[:, 1]
     
-    raise ValueError('model must be either a MLPClassifier or a RandomForestClassifier')
+    raise ValueError('model must be either a ScikitMLPClassifier or a ScikitRandomForestClassifier')
 
 def scikit_predict_proba_fn(model: object) -> object:
     '''

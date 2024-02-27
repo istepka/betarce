@@ -69,6 +69,7 @@ class MLPClassifier(nn.Module):
         return self.forward(x).flatten()
     
     def predict_crisp(self, x, threshold=0.5):
+        x = array_to_tensor(x)
         return (self.predict_proba(x) > threshold).int()
     
     def fit(self, 
@@ -340,7 +341,9 @@ class StatrobGlobal:
         print(f'Out shape: {out.shape}')
         
         # Validity criterion
-        blackbox_preds = self.blackbox.predict_crisp(array_to_tensor(x)).numpy()
+        blackbox_preds = self.blackbox.predict_crisp(x)
+        if isinstance(blackbox_preds, torch.Tensor):
+            blackbox_preds = blackbox_preds.detach().numpy()
         blackbox_preds = blackbox_preds if target_class == 1 else 1 - blackbox_preds
         print(f'Blackbox prediction: {blackbox_preds.shape}')
         
