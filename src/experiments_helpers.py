@@ -1,3 +1,4 @@
+from abc import abstractmethod
 import os
 
 from sklearn.model_selection import train_test_split 
@@ -24,41 +25,74 @@ from explainers import BaseExplainer, DiceExplainer, AlibiWachter, GrowingSphere
 from statrob import StatrobGlobal, MLPClassifier
 
 class ExperimentDataBase: 
-    def __init__(self) -> None:
-        self.dataset: Dataset = None
-        
-    def create(self) -> None:
-        raise NotImplementedError('Method not implemented.')
-    
-    def get_dataset(self) -> Dataset:
-        return self.dataset
-
-class TwoSamplesOneDatasetExperimentData(ExperimentDataBase):
     def __init__(self,
                  dataset: Dataset,
                  standardize: str = 'minmax',
                  one_hot_encode: bool = True,
-                 random_state: int | None = None) -> None:
+                 random_state: int | None = None,
+                 train_test_split_ratio: float = 0.85
+        ) -> None:
         '''
         Parameters: 
             - dataset: (Dataset) The dataset to be used in the experiment.
             - standardize: (str) The standardization method. Either 'minmax' or 'zscore'.
             - one_hot_encode: (bool) Whether to one-hot encode the data.
             - random_state: (int) Random state for reproducibility.
+            - train_test_split_ratio: (float) The ratio of the train-test split.
         '''
         super().__init__()
         self.dataset = dataset
         self.standardize = standardize
         self.one_hot_encode = one_hot_encode
         self.random_state = random_state
+        self.train_test_split_ratio = train_test_split_ratio
         
         if standardize not in ['minmax', 'zscore']:
             raise ValueError('standardize must be either "minmax" or "zscore"')
         
         if random_state is not None:
             np.random.seed(random_state)
+    
+    @abstractmethod
+    def _create_datasets(self) -> tuple[Dataset, Dataset]:
+        raise NotImplementedError('Method not implemented.')
         
-    def __create_datasets(self) -> tuple[Dataset, Dataset]:
+    def create(self) -> tuple[tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series], 
+                              tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]]:
+        '''
+        Creates the two samples and preprocesses them.
+        
+        Returns:
+            - The preprocessed samples. In form of (X_train, X_test, y_train, y_test) tuples for both samples.
+        '''
+        
+        dataset1, dataset2 = self._create_datasets()
+        
+        self.preprocessor = DatasetPreprocessor(dataset1,
+                                            standardize_data=self.standardize,
+                                            one_hot=self.one_hot_encode,
+                                            random_state=self.random_state,
+                                            split=self.train_test_split_ratio
+        )
+        
+        self.preprocessor2 = DatasetPreprocessor(dataset2,
+                                            standardize_data=self.standardize,
+                                            one_hot=self.one_hot_encode,
+                                            random_state=self.random_state,
+                                            split=self.train_test_split_ratio
+        )
+        
+        X_train1, X_test1, y_train1, y_test1 = self.preprocessor.get_data()
+        X_train2, X_test2, y_train2, y_test2 = self.preprocessor2.get_data()
+        
+        return (X_train1, X_test1, y_train1, y_test1), (X_train2, X_test2, y_train2, y_test2)
+    
+    def get_dataset(self) -> Dataset:
+        return self.dataset
+
+
+class TwoSamplesOneDatasetExperimentData(ExperimentDataBase):
+    def _create_datasets(self) -> tuple[Dataset, Dataset]:
         '''
         Splits the dataset into two samples.
         
@@ -86,36 +120,20 @@ class TwoSamplesOneDatasetExperimentData(ExperimentDataBase):
         
         return dataset1, dataset2    
     
-    def create(self) -> tuple[tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series], 
-                              tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]]:
+class SameSampleExperimentData(ExperimentDataBase):
+    def _create_datasets(self) -> tuple[Dataset, Dataset]:
         '''
-        Creates the two samples and preprocesses them.
+        Creates two identical samples.
         
         Returns:
-            - The preprocessed samples. In form of (X_train, X_test, y_train, y_test) tuples for both samples.
+            - Tuple[Dataset, Dataset]: The two samples.
         '''
+        dataset1 = deepcopy(self.dataset)
+        dataset2 = deepcopy(self.dataset)
         
-        dataset1, dataset2 = self.__create_datasets()
-        
-        self.preprocessor1 = DatasetPreprocessor(dataset1,
-                                            standardize_data=self.standardize,
-                                            one_hot=self.one_hot_encode,
-                                            random_state=self.random_state,
-                                            split=0.85
-        )
-        
-        self.preprocessor2 = DatasetPreprocessor(dataset2,
-                                            standardize_data=self.standardize,
-                                            one_hot=self.one_hot_encode,
-                                            random_state=self.random_state,
-                                            split=0.85
-        )
-        
-        X_train1, X_test1, y_train1, y_test1 = self.preprocessor1.get_data()
-        X_train2, X_test2, y_train2, y_test2 = self.preprocessor2.get_data()
-        
-        return (X_train1, X_test1, y_train1, y_test1), (X_train2, X_test2, y_train2, y_test2)
+        return dataset1, dataset2
 
+    
 class ExperimentResults:
     def __init__(self) -> None:
         self.results = defaultdict(list)
@@ -216,159 +234,42 @@ class ExperimentResults:
             print(f'Error loading results from file: {e}')
             return None    
 
-class ExperimentBase:
-    def run(self) -> None:
-        raise NotImplementedError('Method not implemented.')
 
-class TwoDatasetsExperiment(ExperimentBase):
-    
-    def __init__(self, 
-                 model_type: str,
-                 experiment_data: TwoSamplesOneDatasetExperimentData,
-                 config: ConfigWrapper | None = None,
-                 wandb_logger: bool = False,
-                 custom_experiment_name: str | None = None
-                 ) -> None:
-        super().__init__()
+class ExperimentBase:
+    def __init__(self) -> None:
+        self.model_type: str 
+        self.config: ConfigWrapper
+        self.custom_experiment_name: str
         
-        self.model_type = model_type
-        self.config = config
-        self.custom_experiment_name = custom_experiment_name \
-            if custom_experiment_name is not None else 'TwoDatasetsExperiment'
+        self.experiment_data: ExperimentDataBase
+        self.wandb_logger: wandb.run
+        self.target_column: str
+        self.continuous_features: list[str]
         
-        self.experiment_data = experiment_data  
-        self.wandb_logger = wandb_logger
-        self.target_column = experiment_data.dataset.get_target_column()
-        self.continuous_features = experiment_data.dataset.get_continuous_columns()
+        self.class_threshold: float
         
-        self.class_threshold = self.config.get_config_by_key('classification_threshold')
+        self.X_train1: pd.DataFrame
+        self.X_test1: pd.DataFrame
+        self.y_train1: pd.Series
+        self.y_test1: pd.Series
         
-        s1, s2 = self.experiment_data.create()
-        self.X_train1, self.X_test1, self.y_train1, self.y_test1 = s1
-        self.X_train2, self.X_test2, self.y_train2, self.y_test2 = s2
+        self.X_train2: pd.DataFrame
+        self.X_test2: pd.DataFrame
+        self.y_train2: pd.Series
+        self.y_test2: pd.Series
+            
+        self.preprocessor: DatasetPreprocessor
+        self.robXHparams: dict
         
-        self.preprocessor = self.experiment_data.preprocessor1
+        self.results: ExperimentResults = ExperimentResults()
+        self.prep_done: bool = False
         
-        self.robXHparams = config.get_model_config('robXHparams')
+        self.lof_model: LocalOutlierFactor
+        self.lof_model2: LocalOutlierFactor
         
-        self.results = ExperimentResults()
+    def prepare(self):
+        raise NotImplementedError('Method not implemented.')
         
-        self.prep_done = False
-    
-    def prepare(self, 
-            calibrate: bool = False,
-            calibrate_method: str = 'isotonic'
-        ) -> None: 
-        '''
-        Prepares the experiment by training the models and calculating the accuracy.
-        
-        Parameters:
-            - calibrate: (bool) Whether to calibrate the models.
-            - calibrate_method: (str) The calibration method. Either 'isotonic' or 'sigmoid'.
-        '''
-        # Fit two models on the two samples  
-        if self.model_type == 'mlp-sklearn':
-            hparams = self.config.get_config_by_key('mlp-sklearn')
-        elif self.model_type == 'rf-sklearn':
-            hparams = self.config.get_config_by_key('rf-sklearn')
-        elif self.model_type == 'mlp-torch':
-            hparams = self.config.get_config_by_key('mlp-torch')
-            
-            if calibrate:
-                raise ValueError('Calibration is not supported for PyTorch models.')
-            
-        else:
-            raise ValueError('model_type must be either "mlp-sklearn" or "rf-sklearn"')
-        
-        print(self.X_train1.head())
-        print(hparams)
-            
-            
-        if 'sklearn' in self.model_type:
-            print('Training sklearn model')
-            _model_type = self.model_type.split('-')[0].upper()
-            if calibrate:
-                self.model1 = train_calibrated_model(_model_type, self.X_train1, self.y_train1, 
-                                                    base_model_hparams=hparams, calibration_method=calibrate_method)
-            else:
-                self.model1 = train_model(_model_type, self.X_train1, self.y_train1, hparams=hparams)
-                
-            self.model2 = train_model(_model_type, self.X_train2, self.y_train2, hparams=hparams)
-            
-            save_model(self.model1, f'models/{self.custom_experiment_name}_sample1.joblib')
-            save_model(self.model2, f'models/{self.custom_experiment_name}_sample2.joblib')
-            
-            
-            self.predict_fn_1 = scikit_predict_proba_fn(self.model1)
-            self.predict_fn_1_crisp = scikit_predict_crisp_fn(self.model1)
-            
-            self.predict_fn_2 = scikit_predict_proba_fn(self.model2)
-            self.predict_fn_2_crisp = scikit_predict_crisp_fn(self.model2)
-           
-            
-        elif 'torch' in self.model_type:
-            print('Training torch model')
-            self.model1 = MLPClassifier(
-                input_dim=self.X_train1.shape[1],
-                hidden_dims=hparams['hidden_dims'],
-                activation=hparams['activation'],
-                dropout=hparams['dropout'],
-                seed=self.config.get_config_by_key('random_state')
-            )
-                
-            X_train1, X_val1, y_train1, y_val1 = train_test_split(self.X_train1, self.y_train1, test_size=0.15, random_state=42)
-            self.model1.fit(
-                X_train1, y_train1,
-                X_val=X_val1, y_val=y_val1,
-                epochs=hparams['epochs'],
-                lr=hparams['lr'],
-                batch_size=hparams['batch_size'],
-                verbose=hparams['verbose'],
-                early_stopping=hparams['early_stopping'],
-            )
-            self.predict_fn_1 = lambda x: self.model1.predict_proba(x)
-            self.predict_fn_1_crisp = lambda x: self.model1.predict_crisp(x, threshold=self.class_threshold)
-            
-            self.model2 = MLPClassifier(
-                input_dim=self.X_train2.shape[1],
-                hidden_dims=hparams['hidden_dims'],
-                activation=hparams['activation'],
-                dropout=hparams['dropout'],
-                seed=self.config.get_config_by_key('random_state')
-            )
-            
-            X_train2, X_val2, y_train2, y_val2 = train_test_split(self.X_train2, self.y_train2, test_size=0.15, random_state=42)
-            self.model2.fit(
-                X_train2, y_train2,
-                X_val=X_val2, y_val=y_val2,
-                epochs=hparams['epochs'],
-                lr=hparams['lr'],
-                batch_size=hparams['batch_size'],
-                verbose=hparams['verbose'],
-                early_stopping=hparams['early_stopping'],
-            )
-            
-            self.predict_fn_2 = lambda x: self.model2.predict_proba(x)
-            self.predict_fn_2_crisp = lambda x: self.model2.predict_crisp(x, threshold=self.class_threshold)
-            
-        else:
-            raise ValueError('model_type unsupported')
-            
-        
-        # Calculate the accuracy of the models
-        self.acc1 = accuracy_score(self.y_test1, self.predict_fn_1_crisp(self.X_test1))
-        self.acc2 = accuracy_score(self.y_test2, self.predict_fn_2_crisp(self.X_test2))
-        
-        self.log_artifact('accuracy_model1', self.acc1)
-        self.log_artifact('accuracy_model2', self.acc2)
-         
-        self.lof_model = LocalOutlierFactor(n_neighbors=50, novelty=True, p=1)
-        self.lof_model.fit(self.X_train1.to_numpy()) # Fit the LOF model without column names
-        self.lof_model2 = LocalOutlierFactor(n_neighbors=50, novelty=True, p=1)
-        self.lof_model2.fit(self.X_train2.to_numpy())
-        
-        self.prep_done = True
-           
     def run(self, 
             robust_method: str, 
             base_cf_method: str,
@@ -477,7 +378,7 @@ class TwoDatasetsExperiment(ExperimentBase):
         for j in tqdm(range(len(X_test)), total=len(X_test)):
             
             orig_x = X_test[j:j+1] # Get the instance to be explained pd.DataFrame
-            orig_y = int(self.predict_fn_1_crisp(orig_x)) # Get the label of the instance, as we rely on the model not on the ground truth
+            orig_y = int(self.predict_fn_1_crisp(orig_x)[0]) # Get the label of the instance, as we rely on the model not on the ground truth
             
             start_time = time.time()
             try:
@@ -518,7 +419,6 @@ class TwoDatasetsExperiment(ExperimentBase):
                     cf = cf_numpy,
                     cf_desired_class=1 - orig_y,
                     x = x_numpy,
-                    model = model,
                     lof_model = self.lof_model,
                     predict_fn = self.predict_fn_1,
                     robXHparams = self.robXHparams
@@ -528,7 +428,6 @@ class TwoDatasetsExperiment(ExperimentBase):
                     cf = cf_numpy,
                     cf_desired_class=1 - orig_y,
                     x = x_numpy,
-                    model = self.model2,
                     lof_model = self.lof_model2,
                     predict_fn = self.predict_fn_2,
                     robXHparams = self.robXHparams
@@ -581,7 +480,6 @@ class TwoDatasetsExperiment(ExperimentBase):
                     cf = robust_cf,
                     cf_desired_class=cf_desired_class,
                     x = x_numpy,
-                    model = model,
                     lof_model = self.lof_model,
                     predict_fn = self.predict_fn_1,
                     robXHparams = self.robXHparams
@@ -591,7 +489,6 @@ class TwoDatasetsExperiment(ExperimentBase):
                     cf = robust_cf,
                     cf_desired_class=cf_desired_class,
                     x = x_numpy,
-                    model = self.model2,
                     lof_model = self.lof_model2,
                     predict_fn = self.predict_fn_2,
                     robXHparams = self.robXHparams
@@ -615,7 +512,6 @@ class TwoDatasetsExperiment(ExperimentBase):
     def calculate_metrics(self, cf: np.ndarray, 
                           cf_desired_class: int,
                           x: np.ndarray, 
-                          model: object,
                           lof_model: LocalOutlierFactor,
                           predict_fn: callable,
                           robXHparams: dict
@@ -627,7 +523,6 @@ class TwoDatasetsExperiment(ExperimentBase):
             - cf: (np.ndarray) The counterfactual example.
             - cf_desired_class: (int) The desired class of the counterfactual example.
             - x: (np.ndarray) The original instance.
-            - model: (object) The model to be used for predictions.
             - lof_model: (object) The Local Outlier Factor model.
             - predict_fn: (function) The function to be used for predictions.
             - robXHparams: (dict) The hyperparameters for the RobustX algorithm.
@@ -661,6 +556,181 @@ class TwoDatasetsExperiment(ExperimentBase):
     def get_results(self) -> ExperimentResults:
         return self.results
         
+    
+class TwoDatasetsExperiment(ExperimentBase):
+    '''
+    An experiment which trains two models on two samples given by ExperimentDataBase create method.
+    '''
+    def __init__(self, 
+                 model_type: str,
+                 experiment_data: TwoSamplesOneDatasetExperimentData,
+                 config: ConfigWrapper | None = None,
+                 wandb_logger: bool = False,
+                 custom_experiment_name: str | None = None
+                 ) -> None:
+        super().__init__()
+        
+        self.model_type = model_type
+        self.config = config
+        self.custom_experiment_name = custom_experiment_name \
+            if custom_experiment_name is not None else 'TwoDatasetsExperiment'
+        
+        self.experiment_data = experiment_data  
+        self.wandb_logger = wandb_logger
+        self.target_column = experiment_data.dataset.get_target_column()
+        self.continuous_features = experiment_data.dataset.get_continuous_columns()
+        
+        self.class_threshold = self.config.get_config_by_key('classification_threshold')
+        
+        s1, s2 = self.experiment_data.create()
+        self.X_train1, self.X_test1, self.y_train1, self.y_test1 = s1
+        self.X_train2, self.X_test2, self.y_train2, self.y_test2 = s2
+        
+        self.preprocessor = self.experiment_data.preprocessor
+        
+        self.robXHparams = config.get_model_config('robXHparams')
+        
+        self.results = ExperimentResults()
+        
+        self.lof_model = LocalOutlierFactor(n_neighbors=50, novelty=True, p=1)
+        self.lof_model.fit(self.X_train1.to_numpy()) # Fit the LOF model without column names
+        self.lof_model2 = LocalOutlierFactor(n_neighbors=50, novelty=True, p=1)
+        self.lof_model2.fit(self.X_train2.to_numpy())
+        
+        self.prep_done = False
+    
+    def prepare(self, 
+            seed: int | tuple[int, int] = None,
+            calibrate: bool = False,
+            calibrate_method: str = 'isotonic'
+        ) -> None: 
+        '''
+        Prepares the experiment by training the models and calculating the accuracy.
+        
+        Parameters:
+            - calibrate: (bool) Whether to calibrate the models.
+            - calibrate_method: (str) The calibration method. Either 'isotonic' or 'sigmoid'.
+        '''
+        # Fit two models on the two samples  
+        if self.model_type == 'mlp-sklearn':
+            hparams = self.config.get_config_by_key('mlp-sklearn')
+        elif self.model_type == 'rf-sklearn':
+            hparams = self.config.get_config_by_key('rf-sklearn')
+        elif self.model_type == 'mlp-torch':
+            hparams = self.config.get_config_by_key('mlp-torch')
+            
+            if calibrate:
+                raise ValueError('Calibration is not supported for PyTorch models.')
+            
+        else:
+            raise ValueError('model_type must be either "mlp-sklearn" or "rf-sklearn"')
+
+            
+        if 'sklearn' in self.model_type:
+            print('Training sklearn model')
+            _model_type = self.model_type.split('-')[0].upper()
+            
+            if seed:
+                if isinstance(seed, tuple):
+                    hparams['random_state'] = seed[0]
+                else:
+                    hparams['random_state'] = seed
+            
+            if calibrate:
+                self.model1 = train_calibrated_model(_model_type, self.X_train1, self.y_train1, 
+                                                    base_model_hparams=hparams, calibration_method=calibrate_method)
+            else:
+                self.model1 = train_model(_model_type, self.X_train1, self.y_train1, hparams=hparams)
+                
+            if seed:
+                if isinstance(seed, tuple):
+                    hparams['random_state'] = seed[1]
+                else:
+                    hparams['random_state'] = seed
+                
+            self.model2 = train_model(_model_type, self.X_train2, self.y_train2, hparams=hparams)
+            
+            save_model(self.model1, f'models/{self.custom_experiment_name}_sample1.joblib')
+            save_model(self.model2, f'models/{self.custom_experiment_name}_sample2.joblib')
+            
+            
+            self.predict_fn_1 = scikit_predict_proba_fn(self.model1)
+            self.predict_fn_1_crisp = scikit_predict_crisp_fn(self.model1)
+            
+            self.predict_fn_2 = scikit_predict_proba_fn(self.model2)
+            self.predict_fn_2_crisp = scikit_predict_crisp_fn(self.model2)
+           
+            
+        elif 'torch' in self.model_type:
+            seed1 = self.config.get_config_by_key('random_state')
+            seed2 = self.config.get_config_by_key('random_state')
+            
+            if seed:
+                if isinstance(seed, tuple):
+                    seed1 = seed[0]
+                    seed2 = seed[1]
+                else:
+                    seed1 = seed
+                    seed2 = seed
+            
+            
+            print('Training torch model')
+            self.model1 = MLPClassifier(
+                input_dim=self.X_train1.shape[1],
+                hidden_dims=hparams['hidden_dims'],
+                activation=hparams['activation'],
+                dropout=hparams['dropout'],
+                seed=seed1
+            )
+                
+            X_train1, X_val1, y_train1, y_val1 = train_test_split(self.X_train1, self.y_train1, test_size=0.15, random_state=42)
+            self.model1.fit(
+                X_train1, y_train1,
+                X_val=X_val1, y_val=y_val1,
+                epochs=hparams['epochs'],
+                lr=hparams['lr'],
+                batch_size=hparams['batch_size'],
+                verbose=hparams['verbose'],
+                early_stopping=hparams['early_stopping'],
+            )
+            self.predict_fn_1 = lambda x: self.model1.predict_proba(x).detach().numpy()
+            self.predict_fn_1_crisp = lambda x: self.model1.predict_crisp(x, threshold=self.class_threshold).detach().numpy()
+            
+            self.model2 = MLPClassifier(
+                input_dim=self.X_train2.shape[1],
+                hidden_dims=hparams['hidden_dims'],
+                activation=hparams['activation'],
+                dropout=hparams['dropout'],
+                seed=seed2
+            )
+            
+            X_train2, X_val2, y_train2, y_val2 = train_test_split(self.X_train2, self.y_train2, test_size=0.15, random_state=42)
+            self.model2.fit(
+                X_train2, y_train2,
+                X_val=X_val2, y_val=y_val2,
+                epochs=hparams['epochs'],
+                lr=hparams['lr'],
+                batch_size=hparams['batch_size'],
+                verbose=hparams['verbose'],
+                early_stopping=hparams['early_stopping'],
+            )
+            
+            self.predict_fn_2 = lambda x: self.model2.predict_proba(x).detach().numpy()
+            self.predict_fn_2_crisp = lambda x: self.model2.predict_crisp(x, threshold=self.class_threshold).detach().numpy()
+            
+        else:
+            raise ValueError('model_type unsupported')
+            
+        
+        # Calculate the accuracy of the models
+        self.acc1 = accuracy_score(self.y_test1, self.predict_fn_1_crisp(self.X_test1))
+        self.acc2 = accuracy_score(self.y_test2, self.predict_fn_2_crisp(self.X_test2))
+        
+        self.log_artifact('accuracy_model1', self.acc1)
+        self.log_artifact('accuracy_model2', self.acc2)
+        
+        self.prep_done = True
+           
 
 if __name__ == '__main__':
     config_wrapper = ConfigWrapper('config.yml')
@@ -674,7 +744,7 @@ if __name__ == '__main__':
             'base_cf_method': 'gs',
             'calibrate': False,
             'calibrate_method': None,
-            'custom_experiment_name': 'mlp_base',
+            'custom_experiment_name': 'torch-fico-gs',
             'robust_method': 'statrob'
         },
         # {
@@ -706,7 +776,7 @@ if __name__ == '__main__':
         
         dataset = Dataset('fico')
         
-        e1 = TwoSamplesOneDatasetExperimentData(
+        e1 = SameSampleExperimentData(
             dataset, 
             random_state=seed,
             one_hot_encode=True,
@@ -730,6 +800,7 @@ if __name__ == '__main__':
         )
         
         td_exp.prepare(
+            seed=(seed, seed + 1),
             calibrate=_exp['calibrate'],
             calibrate_method=_exp['calibrate_method']
         )
@@ -737,7 +808,7 @@ if __name__ == '__main__':
         run_status = td_exp.run(
             robust_method=_exp['robust_method'],
             base_cf_method=_exp['base_cf_method'],
-            stop_after=10
+            stop_after=3
         )
         
         results = td_exp.get_results()

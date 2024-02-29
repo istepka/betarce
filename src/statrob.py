@@ -71,11 +71,16 @@ class MLPClassifier(nn.Module):
     
     def predict_proba(self, x):
         x = array_to_tensor(x)
-        return self.forward(x).flatten().detach().numpy()
+        return self.forward(x).flatten()
     
     def predict_crisp(self, x, threshold=0.5):
         x = array_to_tensor(x)
-        return (self.predict_proba(x) > threshold).int()
+        pred = self.predict_proba(x)
+        
+        if isinstance(pred, np.ndarray):
+            pred = array_to_tensor(pred)
+            
+        return (pred > threshold).int()
     
     def fit(self, 
             X_train: Union[np.array, torch.Tensor],
@@ -349,10 +354,17 @@ class StatrobGlobal:
         self.models = [model for model, _, _, _, _ in results]
         self.models = [model for sublist in self.models for model in sublist]
         
-    def __function_to_optimize(self, x: np.ndarray, target_class: int, method='avg-std') -> Union[int, np.ndarray]:
+    def __function_to_optimize(self, 
+                               x: np.ndarray, 
+                               target_class: int, 
+                               beta_confidence: float, 
+                               method: str ='avg-std',
+                               classification_threshold: float = 0.5
+        ) -> Union[int, np.ndarray]:
         '''
         Return the value of the function at a given point x
         '''
+        assert beta_confidence > 0 and beta_confidence < 1, 'Confidence level must be between 0 and 1'
         
         # Optimized function
         out = wrap_ensemble_crisp(x, self.models, method=method)
@@ -376,13 +388,13 @@ class StatrobGlobal:
         
         if preds.shape[1] > 1:
             for i in range(preds.shape[1]):
-                passes = self.test_beta_credible_interval(preds[:, i], confidence=0.9, thresh=0.5)
+                passes = self.test_beta_credible_interval(preds[:, i], confidence=beta_confidence, thresh=classification_threshold)
                 # print(f'Passes: {passes}')
                 if not passes:
                     results[i] = 0
         else:
             preds = preds.flatten()
-            passes = self.test_beta_credible_interval(preds, confidence=0.9, thresh=0.5)
+            passes = self.test_beta_credible_interval(preds, confidence=beta_confidence, thresh=classification_threshold)
             # print(f'Passes: {passes}')
             if not passes:
                 results = 0
@@ -390,7 +402,13 @@ class StatrobGlobal:
 
         return results
         
-    def optimize(self, start_sample: np.ndarray, target_class: int, method: str = 'GS', opt_hparams: dict = None) -> np.ndarray:
+    def optimize(self, start_sample: np.ndarray, 
+                 target_class: int, 
+                 method: str = 'GS', 
+                 desired_confidence: float = 0.9,
+                 classification_threshold: float = 0.5,
+                 opt_hparams: dict = None
+        ) -> np.ndarray:
         '''
         Optimize the input example
         
@@ -398,10 +416,17 @@ class StatrobGlobal:
             - start_sample: np.ndarray, the input example
             - target_class: int, the target class
             - method: str, the optimization method
+            - desired_confidence: float, the desired confidence level
+            - classification_threshold: float, the classification threshold
             - opt_hparams: dict, the optimization hyperparameters. If None, use defaults defined in the method
         '''
         
-        pred_fn_crisp = lambda x: self.__function_to_optimize(x, target_class = target_class, method='avg-std')
+        pred_fn_crisp = lambda x: self.__function_to_optimize(x, 
+            target_class=target_class, 
+            beta_confidence=desired_confidence,
+            classification_threshold=classification_threshold,
+            method='avg-std', 
+        )
             
         
         if method == 'GS':
@@ -436,7 +461,7 @@ class StatrobGlobal:
         preds = ensemble_predict_proba(self.models, cf.reshape(1, -1))
         preds = preds if target_class == 1 else 1 - preds
         
-        if not self.test_beta_credible_interval(preds, confidence=0.9, thresh=0.5):
+        if not self.test_beta_credible_interval(preds, confidence=desired_confidence, thresh=classification_threshold):
             print('Counterfactual is not valid!')
         
         return cf
