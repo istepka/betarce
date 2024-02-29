@@ -1,5 +1,6 @@
 from abc import abstractmethod
 import os
+from typing import Union
 
 from sklearn.model_selection import train_test_split 
 print(os.getcwd())
@@ -138,12 +139,29 @@ class ExperimentResults:
     def __init__(self) -> None:
         self.results = defaultdict(list)
         self.artifacts = {}
-    
+        self.wandb_run = wandb.run
+        
+   
     def add_metric(self, metric: str, value: float) -> None:
         self.results[metric].append(value)
         
+        if self.wandb_run:
+            if isinstance(value, bool):
+                value = int(value)
+            wandb.log({metric: value})
+    
     def add_artifact(self, key: str, value: object) -> None:
         self.artifacts[key] = value
+        
+        if self.wandb_run:
+            art = wandb.Artifact(
+                key,
+                type="data_example",
+                metadata={
+                    "object": value,
+                },
+            )
+            wandb.log_artifact(art)
     
     def get_artifact(self, key: str) -> object:
         return self.artifacts[key]
@@ -220,6 +238,15 @@ class ExperimentResults:
         try:
             with open(path, 'wb') as f:
                 joblib.dump(self, f)
+                  
+            if self.wandb_run:
+                artifact = wandb.Artifact(
+                    'experiment_results',
+                    type="ExperimentResults",
+                )
+                artifact.add_file(path)
+                wandb.log_artifact(artifact)
+                
             return True
         except Exception as e:
             print(f'Error serializing results: {e}')
@@ -532,7 +559,7 @@ class ExperimentBase:
         '''
         
         cf_label = predict_fn(cf)[0] > self.class_threshold
-        validity = int(cf_label) == cf_desired_class
+        validity = int(int(cf_label) == cf_desired_class)
         proximityL1 = np.sum(np.abs(x - cf))
         lof = lof_model.score_samples(cf.reshape(1, -1))[0]
         cf_counterfactual_stability = counterfactual_stability(
@@ -547,9 +574,6 @@ class ExperimentBase:
         }
     
     def log_artifact(self, key: str, value: object) -> None:
-        if self.wandb_logger:
-            wandb.log({key: value})
-        
         print(f'Accuracy of model 1: {self.acc1}')
         print(f'Accuracy of model 2: {self.acc2}')
            
@@ -746,21 +770,7 @@ if __name__ == '__main__':
             'calibrate_method': None,
             'custom_experiment_name': 'torch-fico-gs',
             'robust_method': 'statrob'
-        },
-        # {
-        #     'model_type': 'mlp',
-        #     'base_cf_method': 'dice',
-        #     'calibrate': True,
-        #     'calibrate_method': 'isotonic',
-        #     'custom_experiment_name': 'mlp_isotonic-cv'
-        # },
-        # {
-        #     'model_type': 'mlp',
-        #     'base_cf_method': 'dice',
-        #     'calibrate': True,
-        #     'calibrate_method': 'sigmoid',
-        #     'custom_experiment_name': 'mlp_sigmoid-cv'
-        # }
+        }
     ]
     
     
@@ -808,11 +818,30 @@ if __name__ == '__main__':
         run_status = td_exp.run(
             robust_method=_exp['robust_method'],
             base_cf_method=_exp['base_cf_method'],
-            stop_after=15
+            stop_after=20
         )
         
         results = td_exp.get_results()
         results.save_to_file(f'{results_dir}/{_exp["custom_experiment_name"]}.joblib')
+        
+    wandb_enabled = config_wrapper.get_config_by_key('wandb_enabled')
+    if wandb_enabled:
+        with open(config_wrapper.get_config_by_key('wandb_file'), 'r') as f:
+            key = f.read()
+        
+        wandb.login(key=key)
+        
+        wandb.init(
+            project=config_wrapper.get_config_by_key('wandb_project'),
+            name=config_wrapper.get_config_by_key('experiment_name'),
+        )
+        # Log the config
+        wandb.config.update(config_wrapper.get_entire_config())
+        
+        # Log experiment details list
+        wandb.config.update({'experiments': experiments})
+        
+        
         
     
     import multiprocessing as mp
@@ -833,4 +862,5 @@ if __name__ == '__main__':
     print('All experiments finished.')
     
     
-            
+    if wandb_enabled:
+        wandb.finish()

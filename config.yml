@@ -37,15 +37,20 @@ robXHparams:
   N: 1000
 
 statrobHparams:
-  k_mlps: 32
+  k_mlps: 16
   method: GS
-  beta_confidence: 0.9
+  beta_confidence: 0.7
+  beta_estim_method: 'MLE'
   growingSpheresHparams:
     max_iter: 100
     n_search_samples: 100
     p_norm: 2
-    step: 0.05
+    step: 0.1
     target_proba: 0.5
 
 experiment:
   classification_threshold: 0.5
+  wandb_enabled: false 
+  wandb_project: "statrob"
+  wandb_file: "wandb.key"
+  experiment_name: "statrob"

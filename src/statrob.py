@@ -190,8 +190,8 @@ def train_K_mlps(X_train, y_train, X_test, y_test, K: int = 5, evaluate: bool = 
     f1s = []
     models = []
     for k in range(K):
-        layers = np.random.randint(2, 5)
-        dims = np.random.choice([16,24,32], size=layers)
+        layers = np.random.randint(3, 5)
+        dims = np.random.choice([16,32,64,128], size=layers)
         dropout = np.random.randint(0,3) / 10
         mlp = MLPClassifier(input_dim=X_train.shape[1], hidden_dims=dims, activation='relu', dropout=dropout)
         mlp.fit(
@@ -382,7 +382,7 @@ class StatrobGlobal:
                                x: np.ndarray, 
                                target_class: int, 
                                beta_confidence: float, 
-                               method: str ='avg-std',
+                               beta_estim_method: str ='MLE',
                                classification_threshold: float = 0.5
         ) -> Union[int, np.ndarray]:
         '''
@@ -390,41 +390,89 @@ class StatrobGlobal:
         '''
         assert beta_confidence > 0 and beta_confidence < 1, 'Confidence level must be between 0 and 1'
         
-        # Optimized function
-        out = wrap_ensemble_crisp(x, self.models, method=method)
-        out = out if target_class == 1 else 1 - out
-        print(f'Out shape: {out.shape}')
+        # # Optimized function
+        # out = wrap_ensemble_crisp(x, self.models, method=method)
+        # out = out if target_class == 1 else 1 - out
+        # print(f'Out shape: {out.shape}')
+        
+        print(f'Target class: {target_class}')
         
         # Validity criterion
         blackbox_preds = self.blackbox.predict_crisp(x)
         if isinstance(blackbox_preds, torch.Tensor):
             blackbox_preds = blackbox_preds.detach().numpy()
         blackbox_preds = blackbox_preds if target_class == 1 else 1 - blackbox_preds
-        print(f'Blackbox prediction: {blackbox_preds.shape}')
+        print(f'Blackbox prediction: {blackbox_preds.shape}, {blackbox_preds.mean()}')
+        
+        # Skip if the blackbox predicts the wrong class
+        if np.all(blackbox_preds == 0):
+            if blackbox_preds.shape[0] > 1:
+                return np.zeros(blackbox_preds.shape[0])
+            else:
+                return 0
         
         # Probabilistic outputs for beta CI test criterion
         preds = ensemble_predict_proba(self.models, x)
         preds = preds if target_class == 1 else 1 - preds
         print(f'Preds shape: {preds.shape}')
         
-        # Initialize results
-        results = out * blackbox_preds
+        test_mask = np.zeros(preds.shape[1])
+        beta_medians = np.empty_like(test_mask)
+        beta_vars = np.empty_like(test_mask)
+        beta_skews = np.empty_like(test_mask)
+        beta_kurts = np.empty_like(test_mask)
         
+        # Estimate beta parameters
         if preds.shape[1] > 1:
             for i in range(preds.shape[1]):
-                passes = self.test_beta_credible_interval(preds[:, i], confidence=beta_confidence, thresh=classification_threshold)
-                # print(f'Passes: {passes}')
-                if not passes:
-                    results[i] = 0
+                alpha, beta = estimate_beta_distribution(preds[:, i], method=beta_estim_method)
+                alpha = np.clip(alpha, 0, 100)
+                beta = np.clip(beta, 0, 100)
+                
+                left, _ = scipy.stats.beta.interval(beta_confidence, alpha, beta)
+                test_mask[i] = left > classification_threshold
+                mean, var, skew, kurt = scipy.stats.beta.stats(alpha, beta, moments='mvsk')
+                beta_medians[i] = mean
+                beta_vars[i] = var
+                beta_skews[i] = skew
+                beta_kurts[i] = kurt
+
         else:
-            preds = preds.flatten()
-            passes = self.test_beta_credible_interval(preds, confidence=beta_confidence, thresh=classification_threshold)
-            # print(f'Passes: {passes}')
-            if not passes:
-                results = 0
+            alpha, beta = estimate_beta_distribution(preds.flatten(), method=beta_estim_method)
+            alpha = np.clip(alpha, 0, 100)
+            beta = np.clip(beta, 0, 100)
+            left, _ = scipy.stats.beta.interval(beta_confidence, alpha, beta)
+            test_mask = left > classification_threshold
+            
+            mean, var, skew, kurt = scipy.stats.beta.stats(alpha, beta, moments='mvsk')
+            beta_medians = mean
+            beta_vars = var
+            beta_skews = skew
+            beta_kurts = kurt
+            
+        # Calculate the function value
+        optimized_value = beta_medians - np.sqrt(beta_vars)
+        constraints = test_mask * blackbox_preds
+        results = optimized_value * constraints
+        return results
+
+        # Initialize results
+        # results = out * blackbox_preds
+        
+        # if preds.shape[1] > 1:
+        #     for i in range(preds.shape[1]):
+        #         passes = self.test_beta_credible_interval(preds[:, i], confidence=beta_confidence, thresh=classification_threshold)
+        #         # print(f'Passes: {passes}')
+        #         if not passes:
+        #             results[i] = 0
+        # else:
+        #     preds = preds.flatten()
+        #     passes = self.test_beta_credible_interval(preds, confidence=beta_confidence, thresh=classification_threshold)
+        #     # print(f'Passes: {passes}')
+        #     if not passes:
+        #         results = 0
         
 
-        return results
         
     def optimize(self, start_sample: np.ndarray, 
                  target_class: int, 
@@ -449,7 +497,7 @@ class StatrobGlobal:
             target_class=target_class, 
             beta_confidence=desired_confidence,
             classification_threshold=classification_threshold,
-            method='avg-std', 
+            beta_estim_method='MM' if 'beta_estim_method' not in opt_hparams else opt_hparams['beta_estim_method']
         )
             
         
@@ -480,6 +528,10 @@ class StatrobGlobal:
             cf = gs_explainer.generate(start_sample)
         else:
             raise ValueError(f'Unknown method: {method}')  
+        
+        if cf is None or np.any(np.isnan(cf)):
+            print('Counterfactual is not valid!')
+            return None
         
         # Posthoc check if the counterfactual is valid
         preds = ensemble_predict_proba(self.models, cf.reshape(1, -1))
@@ -638,9 +690,12 @@ if __name__ == '__main__':
     target_class = blackbox.predict_crisp(array_to_tensor(start_sample)).item()
     print(f'BLACKBOX Class: {target_class}')
     cf = statrob.optimize(start_sample, target_class=1-target_class, method='GS')
-    cf = cf.reshape(1, -1)
-    print(f'Counterfactual class: {blackbox.predict_crisp(array_to_tensor(cf)).item()}')
-    print(f'Counterfactual: {cf}')
+    if cf is not None:
+        cf = cf.reshape(1, -1)
+        print(f'Counterfactual class: {blackbox.predict_crisp(array_to_tensor(cf)).item()}')
+        print(f'Counterfactual: {cf}')
+    else:
+        print('No counterfactual found!')
 
     # print(f'Shapes: X_train: {X_train.shape}, X_test: {X_test.shape}, y_train: {y_train.shape}, y_test: {y_test.shape}')
     
