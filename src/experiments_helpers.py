@@ -808,7 +808,7 @@ if __name__ == '__main__':
         run_status = td_exp.run(
             robust_method=_exp['robust_method'],
             base_cf_method=_exp['base_cf_method'],
-            stop_after=3
+            stop_after=15
         )
         
         results = td_exp.get_results()

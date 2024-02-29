@@ -39,6 +39,7 @@ robXHparams:
 statrobHparams:
   k_mlps: 32
   method: GS
+  beta_confidence: 0.9
   growingSpheresHparams:
     max_iter: 100
     n_search_samples: 100

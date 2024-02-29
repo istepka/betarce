@@ -282,8 +282,23 @@ def estimate_beta_distribution(
     
     return alpha, beta        
   
-def bootstrap(sample: np.ndarray, bootstrap_sample_size: int = 20, buckets: int = 30):
+def bootstrap_buckets(sample: np.ndarray, bootstrap_sample_size: int = 20, buckets: int = 30):
     return np.random.choice(sample, size=(buckets, bootstrap_sample_size), replace=True)
+
+def bootstrap(sample: np.ndarray, bootstrap_sample_size: int = 20):
+    '''
+    Bootstrap the sample
+    
+    Parameters:
+        - sample: np.ndarray, the sample to bootstrap
+        - bootstrap_sample_size: int, the size of the bootstrap sample
+        
+    Returns:
+        - np.ndarray, the bootstrapped sample
+    '''
+    range_indices = np.arange(len(sample))
+    indices = np.random.choice(range_indices, size=bootstrap_sample_size, replace=True)
+    return sample[indices]
 
 def test_with_CI(sample: np.ndarray, confidence: float = 0.9, thresh: float = 0.5) -> bool:
     alpha, beta = estimate_beta_distribution(sample, method='MLE')
@@ -345,11 +360,20 @@ class StatrobGlobal:
         self.models: list[nn.Module] = []
         self.blackbox = blackbox
         
-    def fit(self, k_mlps: int = 32) -> None:
+    def fit(self, k_mlps: int = 32, _bootstrap: bool = True) -> None:
         '''
         Fit the ensemble of models
+        
+        Parameters:
+            - k_mlps: int, number of models to train
+            - _bootstrap: bool, whether to use bootstrapping
         '''
         X_train, X_test, y_train, y_test = self.preprocessor.get_numpy()
+        
+        if _bootstrap:
+            X_train = bootstrap(X_train)
+            y_train = bootstrap(y_train)
+        
         results = train_K_mlps_in_parallel(X_train, y_train, X_test, y_test, K=k_mlps, n_jobs=1)
         self.models = [model for model, _, _, _, _ in results]
         self.models = [model for sublist in self.models for model in sublist]
