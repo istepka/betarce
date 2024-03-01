@@ -39,7 +39,7 @@ robXHparams:
 statrobHparams:
   k_mlps: 32
   method: GS
-  beta_confidence: 0.9
+  beta_confidence: 0.7
   beta_estim_method: 'MLE'
   growingSpheresHparams:
     max_iter: 100

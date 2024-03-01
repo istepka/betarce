@@ -125,6 +125,9 @@ class MLPClassifier(nn.Module):
             y_val = array_to_tensor(y_val, device=device, dtype=torch.float32)
             
             
+        val_loss_history = []
+        early_stopping_patience = 5
+        
         for epoch in range(epochs):
             for i in range(0, len(X_train), batch_size):
                 X_batch = X_train[i:i+batch_size]
@@ -146,10 +149,14 @@ class MLPClassifier(nn.Module):
                     self.eval()
                     y_pred_val = self.forward(X_val)
                     val_loss = criterion(y_pred_val, y_val)
+                    val_loss_history.append(val_loss)
+                    
                     if verbose:
-                        if epoch % 10 == 0:
+                        if epoch % 5 == 0:
                             print(f'Epoch: {epoch}, Validation Loss: {val_loss.item()}')
-                    if val_loss < 0.01:
+                            
+                            
+                    if val_loss < 0.01 or min(val_loss_history[min(0,len(val_loss_history)-early_stopping_patience):]) < val_loss:
                         break
                 else:
                     if loss < 0.01:
@@ -360,7 +367,7 @@ class StatrobGlobal:
         self.models: list[nn.Module] = []
         self.blackbox = blackbox
         
-    def fit(self, k_mlps: int = 32, _bootstrap: bool = True) -> None:
+    def fit(self, k_mlps: int = 32, _bootstrap: bool = False) -> None:
         '''
         Fit the ensemble of models
         

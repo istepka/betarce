@@ -138,10 +138,10 @@ class SameSampleExperimentData(ExperimentDataBase):
 class ExperimentResults:
     def __init__(self) -> None:
         self.results = defaultdict(list)
+        self.records = defaultdict(list)
         self.artifacts = {}
         self.wandb_run = wandb.run
         
-   
     def add_metric(self, metric: str, value: float) -> None:
         self.results[metric].append(value)
         
@@ -162,6 +162,9 @@ class ExperimentResults:
                 },
             )
             wandb.log_artifact(art)
+            
+    def add_record(self, key: str, value: object) -> None:
+        self.records[key].append(value)
     
     def get_artifact(self, key: str) -> object:
         return self.artifacts[key]
@@ -432,6 +435,7 @@ class ExperimentBase:
             except Exception as e:
                 base_cf = None
                 print(f'Error generating counterfactual: {e}')
+                
             generation_time = time.time() - start_time # Get the generation time in seconds
             
             x_numpy = orig_x.to_numpy()[0]
@@ -467,11 +471,7 @@ class ExperimentBase:
             for k, v in metrics_2.items():
                 self.results.add_metric(f'{k}_2', v)
                 
-            self.results.add_artifact('original_instance', x_numpy)
-            self.results.add_artifact('base_counterfactual', cf_numpy)
-            
             self.results.add_metric('generation_time', generation_time)
-                
                 
             # ROBX PART      
             start_time = time.time()
@@ -529,8 +529,12 @@ class ExperimentBase:
             for k, v in rob_metrics_2.items():
                 self.results.add_metric(f'robust_{k}_2', v)
             
-            self.results.add_artifact('robust_counterfactual', robust_cf)
             self.results.add_metric('robust_generation_time', rob_generation_time)
+            
+            self.results.add_record('base_cf', base_cf)
+            self.results.add_record('robust_cf', robust_cf)
+            self.results.add_record('orig_x', orig_x)
+            self.results.add_record('orig_y', orig_y)
             
             if stop_after and j >= stop_after:
                 print(f'Stopping after {stop_after} iterations.')
@@ -776,7 +780,8 @@ if __name__ == '__main__':
             'calibrate_method': None,
             'custom_experiment_name': 'torch-fico-gs',
             'robust_method': 'statrob',
-            'stop_after': None
+            'stop_after': None,
+            'dataset': 'fico'
         }
     ]
     
@@ -791,7 +796,7 @@ if __name__ == '__main__':
         seed = int(seed)
         _config_wrapper.set_config_by_key('random_state', seed)
         
-        dataset = Dataset('fico')
+        dataset = Dataset(_exp['dataset'])
         
         e1 = SameSampleExperimentData(
             dataset, 

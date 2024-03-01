@@ -11,3 +11,12 @@
     echo "your_wandb_key" > wandb.key
     ```
 
+### Usage
+- Generally speaking, the most important file is `config.yml` which contains all the parameters used by the code running experiments.
+- Running experiments from console.
+    Example 1:  
+    ```bash
+    python src/run_experiments.py --dataset fico --experiment torch-fico-gs-a9 --stop_after 20 --config config.yml
+    ```
+- Results analysis can be performed using `src/results_analysis2.ipynb` notebook.
+

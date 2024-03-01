@@ -16,6 +16,7 @@ parser.add_argument('--base_cf_method', type=str, help='Name of the base counter
 parser.add_argument('--model_type', type=str, help='Type of the model', default='mlp-torch')
 parser.add_argument('--robust_method', type=str, help='Robustness method', default='statrob')
 parser.add_argument('--stop_after', type=int, help='Stop after n iterations', default=None)
+parser.add_argument('--dataset', type=str, help='Name of the dataset', default='fico')
 
 args = parser.parse_args()
 
@@ -34,9 +35,12 @@ experiments = [
         'calibrate_method': None,
         'custom_experiment_name': 'torch-fico-gs' if args.experiment is None else args.experiment,
         'robust_method': 'statrob' if args.robust_method is None else args.robust_method,
-        'stop_after': None if args.stop_after is None else args.stop_after
+        'stop_after': None if args.stop_after is None else args.stop_after,
+        'dataset': 'fico'  if args.dataset is None else args.dataset,
     }
 ]
+
+print(experiments)
 
 
 def __run_experiment(exp_config: dict, rep: int):
@@ -49,7 +53,7 @@ def __run_experiment(exp_config: dict, rep: int):
     seed = int(seed)
     _config_wrapper.set_config_by_key('random_state', seed)
     
-    dataset = Dataset('fico')
+    dataset = Dataset(_exp['dataset'])
     
     e1 = SameSampleExperimentData(
         dataset, 

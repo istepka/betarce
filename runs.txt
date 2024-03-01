@@ -1,0 +1,4 @@
+python src/run_experiments.py --dataset german --experiment torch-german-gs-a6 --stop_after 100 --config config06.yml
+python src/run_experiments.py --dataset german --experiment torch-german-gs-a7 --stop_after 100 --config config07.yml
+python src/run_experiments.py --dataset german --experiment torch-german-gs-a8 --stop_after 100 --config config08.yml
+python src/run_experiments.py --dataset german --experiment torch-german-gs-a9 --stop_after 100 --config config09.yml
