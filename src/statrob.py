@@ -530,7 +530,7 @@ class StatrobGlobal:
             raise ValueError(f'Unknown method: {method}')  
         
         if cf is None or np.any(np.isnan(cf)):
-            print('Counterfactual is not valid!')
+            print(f'Counterfactual is not valid!: {cf}')
             return None
         
         # Posthoc check if the counterfactual is valid
@@ -538,7 +538,7 @@ class StatrobGlobal:
         preds = preds if target_class == 1 else 1 - preds
         
         if not self.test_beta_credible_interval(preds, confidence=desired_confidence, thresh=classification_threshold):
-            print('Counterfactual is not valid!')
+            print(f'Counterfactual does not pass the test!: {cf}')
         
         return cf
     

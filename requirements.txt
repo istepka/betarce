@@ -10,6 +10,6 @@ scikit_learn==1.4.0
 scipy==1.12.0
 seaborn==0.13.2
 tensorflow==2.15.0
-torch==2.1.2.post100
+torch==2.1.2
 tqdm==4.66.1
 wandb==0.16.3

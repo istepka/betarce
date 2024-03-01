@@ -109,20 +109,14 @@ if wandb_enabled:
     
     
 
-import multiprocessing as mp
+# import multiprocessing as mp
 
 
 for exp_config in experiments:
     
-    processes = []
     for rep in range(1):
+        __run_experiment(exp_config, rep)
         
-        p = mp.Process(target=__run_experiment, args=(exp_config, rep))
-        p.start()
-        processes.append(p)
-        
-    for p in processes:
-        p.join()
         
 print('All experiments finished.')
 

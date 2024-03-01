@@ -1,4 +1,3 @@
-name: robustcf
 channels:
   - conda-forge
   - defaults

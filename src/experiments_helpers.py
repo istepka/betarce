@@ -236,6 +236,8 @@ class ExperimentResults:
         
     def save_to_file(self, path: str) -> bool | None:
         try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            
             with open(path, 'wb') as f:
                 joblib.dump(self, f)
                   
@@ -533,6 +535,10 @@ class ExperimentBase:
             if stop_after and j >= stop_after:
                 print(f'Stopping after {stop_after} iterations.')
                 break
+            
+            # Save the results to file after each iteration to avoid losing data
+            results_dir = self.config.get_config_by_key('result_path')
+            self.results.save_to_file(f'{results_dir}/{self.custom_experiment_name}.joblib')
             
         return True
     
