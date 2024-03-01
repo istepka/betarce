@@ -1,7 +1,7 @@
 general:
   data_path: data/
   model_path: models/
-  result_path: results2/
+  result_path: results_bench/
   log_path: logs/
   random_state: 345
   logging_level: INFO
@@ -37,7 +37,7 @@ robXHparams:
   N: 1000
 
 statrobHparams:
-  k_mlps: 16
+  k_mlps: 32
   method: GS
   beta_confidence: 0.7
   beta_estim_method: 'MLE'
