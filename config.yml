@@ -54,3 +54,4 @@ experiment:
   wandb_project: "statrob"
   wandb_file: "wandb.key"
   experiment_name: "statrob"
+  

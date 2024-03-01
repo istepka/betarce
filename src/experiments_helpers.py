@@ -769,7 +769,8 @@ if __name__ == '__main__':
             'calibrate': False,
             'calibrate_method': None,
             'custom_experiment_name': 'torch-fico-gs',
-            'robust_method': 'statrob'
+            'robust_method': 'statrob',
+            'stop_after': None
         }
     ]
     
@@ -818,7 +819,7 @@ if __name__ == '__main__':
         run_status = td_exp.run(
             robust_method=_exp['robust_method'],
             base_cf_method=_exp['base_cf_method'],
-            stop_after=20
+            stop_after=_exp['stop_after']
         )
         
         results = td_exp.get_results()
