@@ -491,6 +491,7 @@ class ExperimentBase:
                             start_sample=cf_numpy.reshape(1, -1),
                             target_class=1 - orig_y,
                             method=self.config.get_config_by_key('statrobHparams')['method'],
+                            desired_confidence=self.config.get_config_by_key('statrobHparams')['beta_confidence'],
                             opt_hparams=self.config.get_config_by_key('statrobHparams')['growingSpheresHparams']
                         )
                         

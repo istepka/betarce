@@ -37,7 +37,7 @@ robXHparams:
   N: 1000
 
 statrobHparams:
-  k_mlps: 32
+  k_mlps: 16
   method: GS
   beta_confidence: 0.9
   beta_estim_method: 'MLE'
