@@ -11,6 +11,7 @@ import scipy
 import warnings
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 import seaborn as sns
+from sklearn.neighbors import NearestNeighbors
 import matplotlib.pyplot as plt
 
 from create_data_examples import DatasetPreprocessor, Dataset
@@ -479,8 +480,6 @@ class StatrobGlobal:
         #     if not passes:
         #         results = 0
         
-
-        
     def optimize(self, start_sample: np.ndarray, 
                  target_class: int, 
                  method: str = 'GS', 
@@ -556,6 +555,165 @@ class StatrobGlobal:
         result = test_with_CI(sample, confidence, thresh)
         return result
     
+    
+class StatRobXPlus:
+    def __init__(self, dataset: Dataset, 
+                 preprocessor: DatasetPreprocessor, 
+                 blackbox: MLPClassifier,
+                 seed: int = 42
+        ) -> None:
+ 
+        self.dataset = dataset
+        self.preprocessor = preprocessor
+        self.seed = seed
+        self.models: list[nn.Module] = []
+        self.blackbox = blackbox
+        # self.nearest_neighbors = NearestNeighbors(n_neighbors=100, algorithm='auto', p=1)
+        
+    def fit(self, k_mlps: int = 32, 
+            _bootstrap: bool = False,
+            
+        ) -> None:
+        '''
+        Fit the ensemble of models
+        
+        Parameters:
+            - k_mlps: int, number of models to train
+            - _bootstrap: bool, whether to use bootstrapping
+        '''
+        X_train, X_test, y_train, y_test = self.preprocessor.get_numpy()
+        
+        if _bootstrap:
+            X_train = bootstrap(X_train)
+            y_train = bootstrap(y_train)
+        
+        results = train_K_mlps_in_parallel(X_train, y_train, X_test, y_test, K=k_mlps, n_jobs=1)
+        self.models = [model for model, _, _, _, _ in results]
+        self.models = [model for sublist in self.models for model in sublist]
+        
+        # self.nearest_neighbors = self.nearest_neighbors.fit(X_train)
+        
+        # Find k-nearest neighbors of the counterfactual that belong to the same class as the counterfactual
+        self.data_Y = self.blackbox.predict_proba(self.preprocessor.X_train).flatten()
+        if isinstance(self.data_Y, torch.Tensor):
+            self.data_Y = self.data_Y.detach().numpy()
+        
+        
+    def optimize(self, start_sample: np.ndarray, 
+                 target_class: int, 
+                 desired_confidence: float = 0.9,
+                 classification_threshold: float = 0.5,
+                 lambd_update: float = 0.1,
+                 max_iter: int = 100,
+                 opt_hparams: dict = None,
+        ) -> Union[np.ndarray, None]:
+         
+        preds = ensemble_predict_proba(self.models, start_sample.reshape(1, -1))
+        preds = preds if target_class == 1 else 1 - preds
+        
+        test = self.test_beta_credible_interval(preds, desired_confidence, classification_threshold)
+        
+        if test and self.blackbox.predict_crisp(start_sample) == target_class:
+            print('The start sample passes the beta credible interval test')
+            # makse sure that the repsone is onediemnsional
+            return start_sample.flatten()
+        
+        # Find conservative counterfactuals
+        conservative_cfs = self.find_conservative_counterfactuals(start_sample, target_class, desired_confidence, classification_threshold)
+        
+        candidates = np.repeat(start_sample, conservative_cfs.shape[0], axis=0)
+        
+        print(f'Conservative counterfactuals: {conservative_cfs.shape}')
+        print(f'Candidates: {candidates.shape}')
+        
+        
+        lambd = 0.1
+        # Optimize the counterfactuals
+        for iii in range(max_iter):
+            for i, (cf, ccf) in enumerate(list(zip(candidates, conservative_cfs))):
+                new_cf = (1-lambd) * cf + lambd * ccf
+                
+                # Check validity under the blackbox
+                valid = self.blackbox.predict_crisp(new_cf)
+                    
+                validity = False
+                if int(valid) == int(target_class):
+                    validity = True
+                
+                preds = ensemble_predict_proba(self.models, new_cf.reshape(1, -1))
+                preds = preds if target_class == 1 else 1 - preds
+                
+                test = self.test_beta_credible_interval(preds, desired_confidence, classification_threshold)
+                if test and validity:
+                    return new_cf
+                else:
+                    candidates[i] = new_cf
+                    
+                if np.allclose(new_cf, ccf):
+                    return new_cf
+            
+            lambd = lambd + lambd_update
+        
+        return None
+                
+                
+        
+        
+    def find_conservative_counterfactuals(self, 
+                                          sample: np.ndarray, 
+                                          target_class: int, 
+                                          desired_confidence: float, 
+                                          classification_threshold: float,
+                                          k: int = 10
+        ) -> np.ndarray:
+    
+        data_Y = (self.data_Y > classification_threshold).astype(int)
+        # data_Y = data_Y.flatten()
+        
+        # Find the indices of the neighbors that belong to the same class as the counterfactual
+        same_class_indices = np.where(data_Y == target_class)
+        
+        # Get the indices of the neighbors that belong to the same class as the counterfactual
+        data = self.preprocessor.X_train.to_numpy()[same_class_indices]
+        
+        # Get the sorted indices of the neighbors by distance, from the closest to the farthest
+        dist = np.sum(np.abs(data - sample), axis=1)
+        indices = np.argsort(dist)
+        
+        # Get the indices of the neighbors that belong to the same class as the counterfactual
+        data = data[indices]
+        
+        conservative_counterfactuals = []
+        history = []
+        
+        for x in data:
+            
+            preds = ensemble_predict_proba(self.models, x.reshape(1, -1))
+            preds = preds if target_class == 1 else 1 - preds
+            
+            test = self.test_beta_credible_interval(preds, desired_confidence, classification_threshold)
+            
+            if test:
+                conservative_counterfactuals.append(x)
+
+            if len(conservative_counterfactuals) == k:
+                break
+            
+        if len(conservative_counterfactuals) < k:
+            print('Warning: not enough neighbors pass the beta credible interval test')
+            print('Counterfactual stability history:', history)
+        if len(conservative_counterfactuals) == 0:
+            print('Warning: no neighbors pass the beta credible interval test')
+            return None
+        
+        return np.array(conservative_counterfactuals)
+            
+    def test_beta_credible_interval(self, sample: np.ndarray, confidence: float = 0.9, thresh: float = 0.5) -> bool:
+        '''
+        Test the beta distribution
+        '''
+        result = test_with_CI(sample, confidence, thresh)
+        return result
     
 # UTILS
 def plot_distribution_of_predictions(predictions: Union[list[float], np.ndarray], save_dir: Union[str, None] = None) -> None:
@@ -677,7 +835,7 @@ if __name__ == '__main__':
     torch.manual_seed(SEED)
     np.random.seed(SEED)
 
-    dataset = Dataset('german')
+    dataset = Dataset('fico')
 
     preprocessor = DatasetPreprocessor(dataset, one_hot=True, random_state=SEED)
 
@@ -689,14 +847,19 @@ if __name__ == '__main__':
     accuracy, recall, precision, f1 = blackbox.evaluate(X_test, y_test)
     print(f'BLACKBOX: Accuracy: {accuracy:.2f}, Recall: {recall:.2f}, Precision: {precision:.2f}, F1: {f1:.2f}')
     
-    statrob = StatrobGlobal(dataset, preprocessor, blackbox=blackbox, seed=SEED)
+    # statrob = StatrobGlobal(dataset, preprocessor, blackbox=blackbox, seed=SEED)
+    # statrob.fit(k_mlps=32)
+    # start_sample = X_test[1:2]
+    # target_class = blackbox.predict_crisp(array_to_tensor(start_sample)).item()
+    # print(f'BLACKBOX Class: {target_class}')
+    # cf = statrob.optimize(start_sample, target_class=1-target_class, method='GS')
+    statrob = StatRobXPlus(dataset, preprocessor, blackbox=blackbox, seed=SEED)
     statrob.fit(k_mlps=32)
-    
     start_sample = X_test[1:2]
-    
     target_class = blackbox.predict_crisp(array_to_tensor(start_sample)).item()
     print(f'BLACKBOX Class: {target_class}')
-    cf = statrob.optimize(start_sample, target_class=1-target_class, method='GS')
+    cf = statrob.optimize(start_sample, target_class=1-target_class)
+    
     if cf is not None:
         cf = cf.reshape(1, -1)
         print(f'Counterfactual class: {blackbox.predict_crisp(array_to_tensor(cf)).item()}')

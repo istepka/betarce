@@ -23,7 +23,7 @@ from dice_wrapper import get_dice_explainer, get_dice_counterfactuals
 from robx import robx_algorithm, counterfactual_stability
 from config_wrapper import ConfigWrapper
 from explainers import BaseExplainer, DiceExplainer, AlibiWachter, GrowingSpheresExplainer
-from statrob import StatrobGlobal, MLPClassifier
+from statrob import StatrobGlobal, MLPClassifier, StatRobXPlus
 
 class ExperimentDataBase: 
     def __init__(self,
@@ -315,7 +315,7 @@ class ExperimentBase:
             - base_cf_method: (str) The method to be used for generating counterfactuals. Either 'dice' or 'wachter' or 'gs'.
             - stop_after: (int) The number of iterations to run the experiment. If None, runs for all test samples.
         '''
-        assert robust_method in ['robx', 'statrob'], 'robust_method must be either "robx" or "statrob"'
+        assert robust_method in ['robx', 'statrob', 'statrobxplus'], 'robust_method must be either "robx" or "statrob" or "statrobxplus"'
         assert base_cf_method in ['dice', 'wachter', 'gs'], 'base_cf_method must be either "dice" or "wachter" or "gs"'
         assert self.prep_done, 'prepare() must be called before run()'
         
@@ -403,11 +403,21 @@ class ExperimentBase:
                 )
                 
                 statrobExplainer.fit(k_mlps=self.config.get_config_by_key('statrobHparams')['k_mlps'])
+            case 'statrobxplus':
+                statrobxplusExplainer = StatRobXPlus(
+                    dataset=X_train.to_numpy(),
+                    preprocessor=self.preprocessor,
+                    blackbox=model,
+                    seed=self.config.get_config_by_key('random_state'),
+                )
+                
+                statrobxplusExplainer.fit(k_mlps=self.config.get_config_by_key('statrobHparams')['k_mlps'])        
+            
             case _:
                 raise ValueError('robust_method must be either "robx" or "statrob"')
             
         warnings.filterwarnings('ignore', category=UserWarning)
-        for j in tqdm(range(len(X_test)), total=len(X_test)):
+        for j in tqdm(range(len(X_test)), total=len(X_test), desc='Running experiment'):
             
             orig_x = X_test[j:j+1] # Get the instance to be explained pd.DataFrame
             orig_y = int(self.predict_fn_1_crisp(orig_x)[0]) # Get the label of the instance, as we rely on the model not on the ground truth
@@ -446,7 +456,6 @@ class ExperimentBase:
                 metrics_2 = empty_metrics.copy()
             else: 
                 cf_numpy = base_cf
-                print(cf_numpy)
                 
                 metrics = self.calculate_metrics(
                     cf = cf_numpy,
@@ -494,7 +503,12 @@ class ExperimentBase:
                             desired_confidence=self.config.get_config_by_key('statrobHparams')['beta_confidence'],
                             opt_hparams=self.config.get_config_by_key('statrobHparams')['growingSpheresHparams']
                         )
-                        
+                    case 'statrobxplus':
+                        robust_cf = statrobxplusExplainer.optimize(
+                            start_sample=cf_numpy.reshape(1, -1),
+                            target_class=1 - orig_y,
+                            desired_confidence=self.config.get_config_by_key('statrobHparams')['beta_confidence'],
+                        )
             except Exception as e:
                 robust_cf = None
                 print(f'Error generating robust counterfactual: {e}')
@@ -507,7 +521,7 @@ class ExperimentBase:
                 cf_desired_class = 1 - orig_y
                 
                 rob_metrics = self.calculate_metrics(
-                    cf = robust_cf,
+                    cf = robust_cf.flatten(),
                     cf_desired_class=cf_desired_class,
                     x = x_numpy,
                     lof_model = self.lof_model,
@@ -516,7 +530,7 @@ class ExperimentBase:
                 )
             
                 rob_metrics_2 = self.calculate_metrics(
-                    cf = robust_cf,
+                    cf = robust_cf.flatten(),
                     cf_desired_class=cf_desired_class,
                     x = x_numpy,
                     lof_model = self.lof_model2,

@@ -5,6 +5,7 @@ from copy import deepcopy
 import numpy as np
 import wandb
 import argparse
+import random
 
 parser = argparse.ArgumentParser(description='Run experiments')
 parser.add_argument('--config', type=str, help='Path to the config file')
@@ -21,11 +22,10 @@ parser.add_argument('--experiment_type', type=str, help='Name of the experiment 
 
 args = parser.parse_args()
 
-
-
 config_wrapper = ConfigWrapper('config.yml' if args.config is None else args.config)
     
 np.random.seed(config_wrapper.get_config_by_key('random_state'))
+random.seed(config_wrapper.get_config_by_key('random_state'))
 results_dir = config_wrapper.get_config_by_key('result_path')
 
 experiments = [
@@ -43,6 +43,7 @@ experiments = [
 ]
 
 print(experiments)
+print(config_wrapper.get_entire_config())
 
 
 def __run_experiment(exp_config: dict, rep: int):
