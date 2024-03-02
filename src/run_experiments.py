@@ -1,5 +1,5 @@
 from config_wrapper import ConfigWrapper
-from experiments_helpers import SameSampleExperimentData, TwoDatasetsExperiment
+from experiments_helpers import SameSampleExperimentData, TwoDatasetsExperiment, TwoSamplesOneDatasetExperimentData
 from create_data_examples import Dataset
 from copy import deepcopy
 import numpy as np
@@ -17,6 +17,7 @@ parser.add_argument('--model_type', type=str, help='Type of the model', default=
 parser.add_argument('--robust_method', type=str, help='Robustness method', default='statrob')
 parser.add_argument('--stop_after', type=int, help='Stop after n iterations', default=None)
 parser.add_argument('--dataset', type=str, help='Name of the dataset', default='fico')
+parser.add_argument('--experiment_type', type=str, help='Name of the experiment data class', default='SameSampleExperimentData')
 
 args = parser.parse_args()
 
@@ -37,6 +38,7 @@ experiments = [
         'robust_method': 'statrob' if args.robust_method is None else args.robust_method,
         'stop_after': None if args.stop_after is None else args.stop_after,
         'dataset': 'fico'  if args.dataset is None else args.dataset,
+        'experiment_type': 'SameSampleExperimentData' if args.experiment_type is None else args.experiment_type,
     }
 ]
 
@@ -55,12 +57,20 @@ def __run_experiment(exp_config: dict, rep: int):
     
     dataset = Dataset(_exp['dataset'])
     
-    e1 = SameSampleExperimentData(
-        dataset, 
-        random_state=seed,
-        one_hot_encode=True,
-        standardize='minmax'
-    )
+    if _exp['experiment_type'] == 'SameSampleExperimentData':
+        e1 = SameSampleExperimentData(
+            dataset, 
+            random_state=seed,
+            one_hot_encode=True,
+            standardize='minmax'
+        )
+    else:
+        e1 = TwoSamplesOneDatasetExperimentData(
+            dataset, 
+            random_state=seed,
+            one_hot_encode=True,
+            standardize='minmax'
+        )
     
     sample1, sample2 = e1.create()
     
