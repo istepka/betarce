@@ -146,7 +146,7 @@ def growing_spheres_search(
         # counterfactual labels
         y_candidate = pred_fn_crisp(candidate_counterfactuals.values)
         indeces = np.where(y_candidate != instance_label)
-        candidate_counterfactuals = candidate_counterfactuals.values[indeces]
+        candidate_counterfactuals = candidate_counterfactuals.to_numpy()[indeces]
         candidate_dist = distances[indeces]
 
         if len(candidate_dist) > 0:  # certain candidates generated

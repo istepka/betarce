@@ -8,7 +8,7 @@ do
     CONFIG="$CONFIGS_PATH/$CONFIG_BASENAME"
 
     DATASET=wine_quality #choices: [fico, german, wine_quality, breast_cancer]
-    STOP_AFTER=200
+    STOP_AFTER=6
     ROBUST_METHOD=statrob #choices: [statrob, robx, statrobxplus]
     EXPERIMENT_TYPE=SameSampleExperimentData #choices: [TwoSamplesOneDatasetExperimentData, SameSampleExperimentData]
     MODEL_TYPE=mlp-torch #choices: [mlp-sklearn, rf-sklearn, mlp-torch]

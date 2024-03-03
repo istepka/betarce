@@ -403,14 +403,14 @@ class StatrobGlobal:
         # out = out if target_class == 1 else 1 - out
         # print(f'Out shape: {out.shape}')
         
-        print(f'Target class: {target_class}')
+        # print(f'Target class: {target_class}')
         
         # Validity criterion
         blackbox_preds = self.blackbox.predict_crisp(x)
         if isinstance(blackbox_preds, torch.Tensor):
             blackbox_preds = blackbox_preds.detach().numpy()
         blackbox_preds = blackbox_preds if target_class == 1 else 1 - blackbox_preds
-        print(f'Blackbox prediction: {blackbox_preds.shape}, {blackbox_preds.mean()}')
+        # print(f'Blackbox prediction: {blackbox_preds.shape}, {blackbox_preds.mean()} {blackbox_preds.flatten().round(3)} {self.blackbox.predict_proba(x).detach().numpy().flatten().round(3)}')
         
         # Skip if the blackbox predicts the wrong class
         if np.all(blackbox_preds == 0):
@@ -422,9 +422,9 @@ class StatrobGlobal:
         # Probabilistic outputs for beta CI test criterion
         preds = ensemble_predict_proba(self.models, x)
         preds = preds if target_class == 1 else 1 - preds
-        print(f'Preds shape: {preds.shape}')
+        # print(f'Preds shape: {preds.shape}')
         
-        test_mask = np.zeros(preds.shape[1])
+        test_mask = np.zeros(blackbox_preds.shape[0])
         # beta_medians = np.empty_like(test_mask)
         # beta_vars = np.empty_like(test_mask)
         # beta_skews = np.empty_like(test_mask)
@@ -439,7 +439,7 @@ class StatrobGlobal:
                 
                 left, _ = scipy.stats.beta.interval(beta_confidence, alpha, beta)
                 test_mask[i] = left > classification_threshold
-                mean, var, skew, kurt = scipy.stats.beta.stats(alpha, beta, moments='mvsk')
+                # mean, var, skew, kurt = scipy.stats.beta.stats(alpha, beta, moments='mvsk')
                 # beta_medians[i] = mean
                 # beta_vars[i] = var
                 # beta_skews[i] = skew
@@ -458,7 +458,7 @@ class StatrobGlobal:
             # beta_skews = skew
             # beta_kurts = kurt
             
-        results = test_mask * blackbox_preds
+        results = test_mask.astype(int) * blackbox_preds.astype(int)
         return results
         
     def optimize(self, start_sample: np.ndarray, 
@@ -528,9 +528,9 @@ class StatrobGlobal:
         if not self.test_beta_credible_interval(preds, confidence=desired_confidence, thresh=classification_threshold):
             print(f'Counterfactual does not pass the test!: \nCounterfactual {cf} \nPredictions: {preds.flatten()}')
             
-        pred = self.blackbox.predict_crisp(cf)
+        pred = self.blackbox.predict_crisp(cf.reshape(1, -1))
         if pred != target_class:
-            prob = self.blackbox.predict_proba(cf)
+            prob = self.blackbox.predict_proba(cf.reshape(1, -1))
             print(f'Counterfactual does not have the target class!: \nCounterfactual {cf} \nPrediction: {pred.flatten()}, should be class: {target_class}. Proba: {prob}')
         
         return cf
