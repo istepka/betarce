@@ -1,0 +1,57 @@
+general:
+  data_path: data/
+  model_path: models/
+  result_path: results_experiment_corr/
+  log_path: logs/
+  random_state: 345
+  logging_level: INFO
+
+mlp-sklearn:
+  hidden_layer_sizes: [100, 100, 100]
+  activation: relu
+  solver: adam
+  learning_rate_init: 0.01
+  max_iter: 1000
+  verbose: true
+  early_stopping: true
+
+rf-sklearn:
+  n_estimators: 100
+  max_depth: 10
+
+mlp-torch:
+  hidden_dims: [100, 100, 100]
+  activation: relu
+  lr: 0.001
+  dropout: 0.2
+  max_iter: 1000
+  epochs: 100
+  batch_size: 128
+  verbose: true
+  early_stopping: true
+
+  
+robXHparams:
+  tau: 0.6
+  variance: 0.01
+  N: 1000
+
+statrobHparams:
+  k_mlps: 32
+  method: GS
+  beta_confidence: 0.75
+  beta_estim_method: 'MLE'
+  growingSpheresHparams:
+    max_iter: 100
+    n_search_samples: 100
+    p_norm: 2
+    step: 0.1
+    target_proba: 0.5
+
+experiment:
+  classification_threshold: 0.5
+  wandb_enabled: false 
+  wandb_project: "statrob"
+  wandb_file: "wandb.key"
+  experiment_name: "statrob"
+  

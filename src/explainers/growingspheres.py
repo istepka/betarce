@@ -65,8 +65,14 @@ def growing_spheres_search(
     # correct order of names
     keys_correct = feature_order
     # divide up keys
-    keys_mutable_continuous = list(set(keys_mutable) - set(binary_cols))
-    keys_mutable_binary = list(set(keys_mutable) - set(continuous_cols))
+    
+    # THIS IMPLEMENTATION IS NOT DETERMINISTIC!!!!
+    # keys_mutable_continuous = list(set(keys_mutable) - set(binary_cols))
+    # keys_mutable_binary = list(set(keys_mutable) - set(continuous_cols))
+    
+    # DETEMINISTIC IMPLEMENTATION
+    keys_mutable_continuous = [k for k in keys_mutable if k not in binary_cols]
+    keys_mutable_binary = [k for k in keys_mutable if k not in continuous_cols]
 
     # Divide data in 'mutable' and 'non-mutable'
     # In particular, divide data in 'mutable & binary' and 'mutable and continuous'

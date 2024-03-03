@@ -5,7 +5,9 @@ from copy import deepcopy
 import numpy as np
 import wandb
 import argparse
+import scipy
 import random
+import torch
 
 parser = argparse.ArgumentParser(description='Run experiments')
 parser.add_argument('--config', type=str, help='Path to the config file')
@@ -24,8 +26,11 @@ args = parser.parse_args()
 
 config_wrapper = ConfigWrapper('config.yml' if args.config is None else args.config)
     
-np.random.seed(config_wrapper.get_config_by_key('random_state'))
-random.seed(config_wrapper.get_config_by_key('random_state'))
+SEED = config_wrapper.get_config_by_key('random_state')
+np.random.seed(SEED)
+random.seed(SEED)
+torch.manual_seed(SEED)
+
 results_dir = config_wrapper.get_config_by_key('result_path')
 
 experiments = [
