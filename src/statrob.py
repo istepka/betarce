@@ -425,10 +425,10 @@ class StatrobGlobal:
         print(f'Preds shape: {preds.shape}')
         
         test_mask = np.zeros(preds.shape[1])
-        beta_medians = np.empty_like(test_mask)
-        beta_vars = np.empty_like(test_mask)
-        beta_skews = np.empty_like(test_mask)
-        beta_kurts = np.empty_like(test_mask)
+        # beta_medians = np.empty_like(test_mask)
+        # beta_vars = np.empty_like(test_mask)
+        # beta_skews = np.empty_like(test_mask)
+        # beta_kurts = np.empty_like(test_mask)
         
         # Estimate beta parameters
         if preds.shape[1] > 1:
@@ -440,10 +440,10 @@ class StatrobGlobal:
                 left, _ = scipy.stats.beta.interval(beta_confidence, alpha, beta)
                 test_mask[i] = left > classification_threshold
                 mean, var, skew, kurt = scipy.stats.beta.stats(alpha, beta, moments='mvsk')
-                beta_medians[i] = mean
-                beta_vars[i] = var
-                beta_skews[i] = skew
-                beta_kurts[i] = kurt
+                # beta_medians[i] = mean
+                # beta_vars[i] = var
+                # beta_skews[i] = skew
+                # beta_kurts[i] = kurt
 
         else:
             alpha, beta = estimate_beta_distribution(preds.flatten(), method=beta_estim_method)
@@ -452,16 +452,13 @@ class StatrobGlobal:
             left, _ = scipy.stats.beta.interval(beta_confidence, alpha, beta)
             test_mask = left > classification_threshold
             
-            mean, var, skew, kurt = scipy.stats.beta.stats(alpha, beta, moments='mvsk')
-            beta_medians = mean
-            beta_vars = var
-            beta_skews = skew
-            beta_kurts = kurt
+            # mean, var, skew, kurt = scipy.stats.beta.stats(alpha, beta, moments='mvsk')
+            # beta_medians = mean
+            # beta_vars = var
+            # beta_skews = skew
+            # beta_kurts = kurt
             
-        # Calculate the function value
-        optimized_value = beta_medians - np.sqrt(beta_vars)
-        constraints = test_mask * blackbox_preds
-        results = optimized_value * constraints
+        results = test_mask * blackbox_preds
         return results
         
     def optimize(self, start_sample: np.ndarray, 
@@ -529,7 +526,12 @@ class StatrobGlobal:
         preds = preds if target_class == 1 else 1 - preds
         
         if not self.test_beta_credible_interval(preds, confidence=desired_confidence, thresh=classification_threshold):
-            print(f'Counterfactual does not pass the test!: {cf}')
+            print(f'Counterfactual does not pass the test!: \nCounterfactual {cf} \nPredictions: {preds.flatten()}')
+            
+        pred = self.blackbox.predict_crisp(cf)
+        if pred != target_class:
+            prob = self.blackbox.predict_proba(cf)
+            print(f'Counterfactual does not have the target class!: \nCounterfactual {cf} \nPrediction: {pred.flatten()}, should be class: {target_class}. Proba: {prob}')
         
         return cf
     
