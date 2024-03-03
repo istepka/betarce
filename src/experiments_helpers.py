@@ -22,7 +22,7 @@ from scikit_models import load_model, scikit_predict_proba_fn, train_model, save
 from dice_wrapper import get_dice_explainer, get_dice_counterfactuals
 from robx import robx_algorithm, counterfactual_stability
 from config_wrapper import ConfigWrapper
-from explainers import BaseExplainer, DiceExplainer, AlibiWachter, GrowingSpheresExplainer
+from explainers import BaseExplainer, DiceExplainer, GrowingSpheresExplainer
 from statrob import StatrobGlobal, MLPClassifier, StatRobXPlus
 
 class ExperimentDataBase: 
@@ -354,6 +354,7 @@ class ExperimentBase:
                 )
             case 'wachter':
                 import tensorflow as tf
+                from explainers import AlibiWachter
                 tf.compat.v1.disable_eager_execution()
                 explainer = AlibiWachter(
                     model=model,
