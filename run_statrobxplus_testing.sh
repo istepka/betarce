@@ -1,6 +1,7 @@
+
 DATASET=wine_quality #choices: [fico, german, wine_quality, breast_cancer]
-STOP_AFTER=5
-CONFIG=config_for_testing.yml
+STOP_AFTER=50
+CONFIG=config09.yml
 ROBUST_METHOD=statrobxplus #choices: [statrob, robx, statrobxplus]
 EXPERIMENT_TYPE=SameSampleExperimentData #choices: [TwoSamplesOneDatasetExperimentData, SameSampleExperimentData]
 MODEL_TYPE=mlp-torch #choices: [mlp-sklearn, rf-sklearn, mlp-torch]
@@ -24,3 +25,10 @@ python src/run_experiments.py --dataset $DATASET \
                                 --robust_method $ROBUST_METHOD \
                                 --experiment_type $EXPERIMENT_TYPE \
                                 --model_type $MODEL_TYPE
+
+
+source deactivate
+
+
+echo "All experiments finished"
+

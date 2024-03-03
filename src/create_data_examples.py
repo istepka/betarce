@@ -63,6 +63,10 @@ class Dataset:
                     self.data = _donuts()
                 case 'moons':
                     self.data = _moons()
+                case 'breast_cancer':
+                    self.data = _breast_cancer()
+                case 'wine_quality':
+                    self.data = _wine_quality()
                 case _:
                     raise ValueError(f'Unknown dataset {self.name}')
                 
@@ -347,6 +351,8 @@ def _german(path: str = 'data/german.csv') -> dict:
         'residence_since', 'age', 'existing_credits', 'num_dependents'
         ]
     target_column = 'class'
+    
+    
 
     monotonic_increase_columns = []
     monotonic_decrease_columns = []
@@ -413,7 +419,74 @@ def _fico(path: str = 'data/fico.csv') -> dict:
     }
     
     return data
+
+def _wine_quality(path: str = 'data/wine_quality.csv') -> dict:
+    #fixed_acidity,volatile_acidity,citric_acid,residual_sugar,chlorides,free_sulfur_dioxide,total_sulfur_dioxide,density,pH,sulphates,alcohol,quality
     
+    raw_df = pd.read_csv(path)
+    categorical_columns = []
+    continuous_columns = raw_df.columns.tolist()
+    continuous_columns.remove('quality')
+    target_column = 'quality'
+    
+    freeze_columns = []
+    feature_ranges = {
+        'fixed_acidity': [raw_df['fixed_acidity'].min(), raw_df['fixed_acidity'].max()],
+        'volatile_acidity': [raw_df['volatile_acidity'].min(), raw_df['volatile_acidity'].max()],
+        'citric_acid': [raw_df['citric_acid'].min(), raw_df['citric_acid'].max()],
+        'residual_sugar': [raw_df['residual_sugar'].min(), raw_df['residual_sugar'].max()],
+        'chlorides': [raw_df['chlorides'].min(), raw_df['chlorides'].max()],
+        'free_sulfur_dioxide': [raw_df['free_sulfur_dioxide'].min(), raw_df['free_sulfur_dioxide'].max()],
+        'total_sulfur_dioxide': [raw_df['total_sulfur_dioxide'].min(), raw_df['total_sulfur_dioxide'].max()],
+        'density': [raw_df['density'].min(), raw_df['density'].max()],
+        'pH': [raw_df['pH'].min(), raw_df['pH'].max()],
+        'sulphates': [raw_df['sulphates'].min(), raw_df['sulphates'].max()],
+        'alcohol': [raw_df['alcohol'].min(), raw_df['alcohol'].max()],
+    }
+    monotonic_increase_columns = []
+    monotonic_decrease_columns = []
+    
+    data = {
+        'raw_df': raw_df,
+        'categorical_columns': categorical_columns,
+        'continuous_columns': continuous_columns,
+        'target_column': target_column,
+        'monotonic_increase_columns': monotonic_increase_columns,
+        'monotonic_decrease_columns': monotonic_decrease_columns,
+        'freeze_columns': freeze_columns,
+        'feature_ranges': feature_ranges
+    }
+    
+    return data
+    
+def _breast_cancer(path: str = 'data/breast_cancer.csv') -> dict:
+    #radius1,texture1,perimeter1,area1,smoothness1,compactness1,concavity1,concave_points1,symmetry1,fractal_dimension1,radius2,texture2,perimeter2,area2,smoothness2,compactness2,concavity2,concave_points2,symmetry2,fractal_dimension2,radius3,texture3,perimeter3,area3,smoothness3,compactness3,concavity3,concave_points3,symmetry3,fractal_dimension3,diagnosis
+# 17.99,10.38,122.8,1001.0,0.1184,0.2776,0.3001,0.1471,0.2419,0.07871,1.095,0.9053,8.589,153.4,0.006399,0.04904,0.05373,0.01587,0.03003,0.006193,25.38,17.33,184.6,2019.0,0.1622,0.6656,0.7119,0.2654,0.4601,0.1189,M
+
+    raw_df = pd.read_csv(path)
+    categorical_columns = []
+    continuous_columns = raw_df.columns.tolist()
+    continuous_columns.remove('diagnosis')
+    target_column = 'diagnosis'
+    
+    freeze_columns = []
+    feature_ranges = {k: [raw_df[k].min(), raw_df[k].max()] for k in continuous_columns}
+    monotonic_increase_columns = []
+    monotonic_decrease_columns = []
+    
+    data = {
+        'raw_df': raw_df,
+        'categorical_columns': categorical_columns,
+        'continuous_columns': continuous_columns,
+        'target_column': target_column,
+        'monotonic_increase_columns': monotonic_increase_columns,
+        'monotonic_decrease_columns': monotonic_decrease_columns,
+        'freeze_columns': freeze_columns,
+        'feature_ranges': feature_ranges
+    }
+  
+    return data
+  
 def _compas(path: str = 'data/compas.csv') -> dict:
     '''
     Load the compas dataset.

@@ -4,8 +4,9 @@ for CONFIG in ${CONFIGS[@]}
 do
 
 
-    DATASET=fico #choices: [fico, german]
-    STOP_AFTER=200
+    DATASET=wine_quality #choices: [fico, german, wine_quality, breast_cancer]
+    STOP_AFTER=5
+    CONFIG=config_for_testing.yml
     ROBUST_METHOD=robx #choices: [statrob, robx, statrobxplus]
     EXPERIMENT_TYPE=SameSampleExperimentData #choices: [TwoSamplesOneDatasetExperimentData, SameSampleExperimentData]
     MODEL_TYPE=mlp-torch #choices: [mlp-sklearn, rf-sklearn, mlp-torch]
@@ -14,7 +15,7 @@ do
     CONFIG_BASENAME="${CONFIG%%.*}"
 
     # Construct the NAME variable
-    NAME="torch-$DATASET-$ROBUST_METHOD-var01-$CONFIG_BASENAME"
+    NAME="$MODEL_TYPE-$DATASET-$ROBUST_METHOD-$EXPERIMENT_TYPE-$CONFIG_BASENAME"
 
     echo "Running experiment with name: $NAME"
 
@@ -29,6 +30,7 @@ do
                                     --robust_method $ROBUST_METHOD \
                                     --experiment_type $EXPERIMENT_TYPE \
                                     --model_type $MODEL_TYPE
+
 
     source deactivate
 

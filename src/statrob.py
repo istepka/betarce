@@ -308,8 +308,8 @@ def bootstrap(sample: np.ndarray, bootstrap_sample_size: int = 20):
     indices = np.random.choice(range_indices, size=bootstrap_sample_size, replace=True)
     return sample[indices]
 
-def test_with_CI(sample: np.ndarray, confidence: float = 0.9, thresh: float = 0.5) -> bool:
-    alpha, beta = estimate_beta_distribution(sample, method='MLE')
+def test_with_CI(sample: np.ndarray, confidence, thresh: float = 0.5, estimation_method: str = 'MLE') -> bool:
+    alpha, beta = estimate_beta_distribution(sample, method=estimation_method)
     left, right = scipy.stats.beta.interval(confidence, alpha, beta)
     return left > thresh
   
@@ -463,28 +463,13 @@ class StatrobGlobal:
         constraints = test_mask * blackbox_preds
         results = optimized_value * constraints
         return results
-
-        # Initialize results
-        # results = out * blackbox_preds
-        
-        # if preds.shape[1] > 1:
-        #     for i in range(preds.shape[1]):
-        #         passes = self.test_beta_credible_interval(preds[:, i], confidence=beta_confidence, thresh=classification_threshold)
-        #         # print(f'Passes: {passes}')
-        #         if not passes:
-        #             results[i] = 0
-        # else:
-        #     preds = preds.flatten()
-        #     passes = self.test_beta_credible_interval(preds, confidence=beta_confidence, thresh=classification_threshold)
-        #     # print(f'Passes: {passes}')
-        #     if not passes:
-        #         results = 0
         
     def optimize(self, start_sample: np.ndarray, 
                  target_class: int, 
                  method: str = 'GS', 
                  desired_confidence: float = 0.9,
                  classification_threshold: float = 0.5,
+                 estimation_method: str = 'MLE',
                  opt_hparams: dict = None
         ) -> np.ndarray:
         '''
@@ -503,7 +488,7 @@ class StatrobGlobal:
             target_class=target_class, 
             beta_confidence=desired_confidence,
             classification_threshold=classification_threshold,
-            beta_estim_method='MM' if 'beta_estim_method' not in opt_hparams else opt_hparams['beta_estim_method']
+            beta_estim_method=estimation_method
         )
             
         
@@ -548,11 +533,11 @@ class StatrobGlobal:
         
         return cf
     
-    def test_beta_credible_interval(self, sample: np.ndarray, confidence: float = 0.9, thresh: float = 0.5) -> bool:
+    def test_beta_credible_interval(self, sample: np.ndarray, confidence, thresh: float = 0.5, estimation_method: str = 'MLE') -> bool:
         '''
         Test the beta distribution
         '''
-        result = test_with_CI(sample, confidence, thresh)
+        result = test_with_CI(sample, confidence, thresh, estimation_method)
         return result
     
     
@@ -601,10 +586,11 @@ class StatRobXPlus:
         
     def optimize(self, start_sample: np.ndarray, 
                  target_class: int, 
-                 desired_confidence: float = 0.9,
+                 desired_confidence: float,
                  classification_threshold: float = 0.5,
                  lambd_update: float = 0.1,
                  max_iter: int = 100,
+                 estimation_method: str = 'MLE',
                  opt_hparams: dict = None,
         ) -> Union[np.ndarray, None]:
          
@@ -643,7 +629,7 @@ class StatRobXPlus:
                 preds = ensemble_predict_proba(self.models, new_cf.reshape(1, -1))
                 preds = preds if target_class == 1 else 1 - preds
                 
-                test = self.test_beta_credible_interval(preds, desired_confidence, classification_threshold)
+                test = self.test_beta_credible_interval(preds, desired_confidence, classification_threshold, estimation_method)
                 if test and validity:
                     return new_cf
                 else:
@@ -708,11 +694,11 @@ class StatRobXPlus:
         
         return np.array(conservative_counterfactuals)
             
-    def test_beta_credible_interval(self, sample: np.ndarray, confidence: float = 0.9, thresh: float = 0.5) -> bool:
+    def test_beta_credible_interval(self, sample: np.ndarray, confidence, thresh: float = 0.5, estimation_method: str = 'MLE') -> bool:
         '''
         Test the beta distribution
         '''
-        result = test_with_CI(sample, confidence, thresh)
+        result = test_with_CI(sample, confidence, thresh, estimation_method)
         return result
     
 # UTILS
