@@ -32,7 +32,7 @@ mlp-torch:
 
   
 robXHparams:
-  tau: 0.6
+  tau: 0.85
   variance: 0.01
   N: 1000
 
