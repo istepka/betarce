@@ -2,7 +2,7 @@
 
 DATASET=wine_quality #choices: [fico, german, wine_quality, breast_cancer]
 STOP_AFTER=50
-CONFIG=config09.yml
+CONFIG=config_for_testing.yml
 ROBUST_METHOD=statrob #choices: [statrob, robx, statrobxplus]
 EXPERIMENT_TYPE=SameSampleExperimentData #choices: [TwoSamplesOneDatasetExperimentData, SameSampleExperimentData]
 MODEL_TYPE=mlp-torch #choices: [mlp-sklearn, rf-sklearn, mlp-torch]

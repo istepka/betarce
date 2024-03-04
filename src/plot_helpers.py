@@ -326,4 +326,94 @@ def plot_decision_boundary_with_artifacts(
         
     if show:
         plt.show()
+ 
+ 
+def plot_decision_boundary_with_artifacts(
+    predict_crisp_fn: callable,
+    X: np.ndarray,
+    y: np.ndarray,
+    artifacts: list[dict],
+    save_path: str = None,
+    show: bool = True,
+    ) -> None:
+    '''
+    Plot the decision boundary of a model along with the artifacts.
     
+    Parameters:
+        - model: the model (object)
+        - X: the data (np.ndarray)
+        - y: the labels (np.ndarray)
+        - artifacts: list of artifacts (list[dict]) - [{'coords': np.ndarray, 'color': str, 'label': str, 'marker': str}]
+        - save_path: the path to save the plot (str)
+        - show: whether to show the plot or not (bool)
+    '''
+
+    # Prepare the grid
+    xx = np.linspace(np.min(X[:,0]), np.max(X[:,0]), 100)
+    yy = np.linspace(np.min(X[:,1]), np.max(X[:,1]), 100)
+    xx, yy = np.meshgrid(xx, yy)
+    grid = np.c_[xx.ravel(), yy.ravel()]
+    
+    
+
+    fig, ax  = plt.subplots(figsize=(5,5))
+    
+    # Plot the crisp decision boundary
+    preds = predict_crisp_fn(grid).reshape(xx.shape)
+    
+    ax.contourf(xx, yy, preds, 25, cmap="RdBu_r", vmin=0, vmax=1)
+    ax.set_title("Decision boundary")
+    ax.set_xlabel("x1")
+    ax.set_ylabel("x2")
+    
+    
+    
+    # Plot the artifacts
+    # [{'coords': np.ndarray, 'color': str, 'label': str, 'marker': str}]
+    for artifact in artifacts:
+        ax.scatter(artifact['coords'][0], artifact['coords'][1], c=artifact['color'], label=artifact['label'], marker=artifact['marker'])
+        
+    plt.legend()
+    
+    if save_path:
+        __save_plot(plt, save_path)
+        
+    if show:
+        plt.show()
+
+def plot_crisp_decision_boundary(
+        predict_crisp_fn: callable, 
+        X: np.ndarray, 
+        y: np.ndarray,
+        save_path: str = None,
+        show: bool = True,
+        ) -> None:
+    '''
+    Plots the decision boundary of a classifier model along with the data points.
+    
+    Parameters:
+        predict_crisp_fn: the predict function of the model (callable)
+        X (np.ndarray): The input feature matrix.
+        y (np.ndarray): The target labels.
+        save_path (str, optional): The file path to save the plot. Defaults to None.
+        show (bool, optional): Whether to display the plot. Defaults to True.
+    '''
+    x_span = np.linspace(min(X[:,0]) - 0.25, max(X[:,0]) + 0.25)
+    y_span = np.linspace(min(X[:,1]) - 0.25, max(X[:,1]) + 0.25)
+    xx, yy = np.meshgrid(x_span, y_span)
+    xx_, yy_ = xx.ravel(), yy.ravel()
+    grid = np.c_[xx_,yy_]
+    pred = predict_crisp_fn(grid)
+    z = pred.reshape(xx.shape)
+    
+    plt.contourf(xx,yy,z, cmap=plt.cm.coolwarm, alpha=0.5)
+    plt.scatter(X[:,0], X[:,1], c=y)
+    plt.title("Decision boundary")
+    plt.xlabel("x1")
+    plt.ylabel("x2")
+    
+    if save_path:
+        __save_plot(plt, save_path)
+    
+    if show:
+        plt.show()

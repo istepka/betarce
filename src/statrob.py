@@ -102,8 +102,7 @@ class MLPClassifier(nn.Module):
         
         # Reshape y_train
         if len(y_train.shape) == 2:
-            y_train = y_train.flatten
-            
+            y_train = y_train.flatten()
             if y_val is not None:
                 y_val = y_val.flatten()
                 
@@ -117,7 +116,6 @@ class MLPClassifier(nn.Module):
                 X_val = X_val.values
             if isinstance(y_val, pd.Series):
                 y_val = y_val.values
-                
         
         X_train = array_to_tensor(X_train, device=device, dtype=torch.float32)
         y_train = array_to_tensor(y_train, device=device, dtype=torch.float32)
@@ -125,9 +123,10 @@ class MLPClassifier(nn.Module):
             X_val = array_to_tensor(X_val, device=device, dtype=torch.float32)
             y_val = array_to_tensor(y_val, device=device, dtype=torch.float32)
             
-            
         val_loss_history = []
         early_stopping_patience = 5
+        best_val_loss = float('inf')
+        patience_counter = 0
         
         for epoch in range(epochs):
             for i in range(0, len(X_train), batch_size):
@@ -138,30 +137,31 @@ class MLPClassifier(nn.Module):
                 loss = criterion(y_pred, y_batch)
                 loss.backward()
                 optimizer.step()
-                
             
+            if verbose and epoch % 10 == 0:
+                print(f'Epoch: {epoch}, Loss: {loss.item()}')
             
-            if verbose:
-                if epoch % 10 == 0:
-                    print(f'Epoch: {epoch}, Loss: {loss.item()}')
-            
-            if early_stopping:
-                if X_val is not None:
+            if early_stopping and X_val is not None:
+                with torch.no_grad():
                     self.eval()
                     y_pred_val = self.forward(X_val)
-                    val_loss = criterion(y_pred_val, y_val)
+                    val_loss = criterion(y_pred_val, y_val).item()
                     val_loss_history.append(val_loss)
                     
-                    if verbose:
-                        if epoch % 5 == 0:
-                            print(f'Epoch: {epoch}, Validation Loss: {val_loss.item()}')
-                            
-                            
-                    if val_loss < 0.01 or min(val_loss_history[min(0,len(val_loss_history)-early_stopping_patience):]) < val_loss:
+                    if verbose and epoch % 5 == 0:
+                        print(f'Epoch: {epoch}, Validation Loss: {val_loss}')
+                    
+                    if val_loss < best_val_loss:
+                        best_val_loss = val_loss
+                        patience_counter = 0
+                    else:
+                        patience_counter += 1
+                    
+                    if patience_counter >= early_stopping_patience:
+                        print("Early stopping due to validation loss not improving.")
                         break
-                else:
-                    if loss < 0.01:
-                        break
+                
+
                     
     def evaluate(self, 
                  X_test: Union[np.array, torch.Tensor],
@@ -198,9 +198,9 @@ def train_K_mlps(X_train, y_train, X_test, y_test, K: int = 5, evaluate: bool = 
     f1s = []
     models = []
     for k in range(K):
-        layers = np.random.randint(3, 5)
-        dims = np.random.choice([16,32,64,128], size=layers)
-        dropout = np.random.randint(0,3) / 10
+        layers = np.random.randint(3, 4)
+        dims = np.random.choice([64,128], size=layers)
+        dropout = np.random.randint(1,3) / 10
         mlp = MLPClassifier(input_dim=X_train.shape[1], hidden_dims=dims, activation='relu', dropout=dropout)
         mlp.fit(
             X_train, 
@@ -208,9 +208,9 @@ def train_K_mlps(X_train, y_train, X_test, y_test, K: int = 5, evaluate: bool = 
             X_val=X_test, 
             y_val=y_test,
             verbose=False,
-            early_stopping=False,
-            lr=0.01,
-            epochs=20
+            early_stopping=True,
+            lr=0.001,
+            epochs=100
         )
         accuracy, recall, precision, f1 = mlp.evaluate(X_test, y_test)
         accuracies.append(accuracy)
@@ -310,6 +310,8 @@ def bootstrap(sample: np.ndarray, bootstrap_sample_size: int = 20):
 
 def test_with_CI(sample: np.ndarray, confidence, thresh: float = 0.5, estimation_method: str = 'MLE') -> bool:
     alpha, beta = estimate_beta_distribution(sample, method=estimation_method)
+    alpha = np.clip(alpha, 0, 50)
+    beta = np.clip(beta, 0, 50)
     left, right = scipy.stats.beta.interval(confidence, alpha, beta)
     return left > thresh
   
@@ -382,9 +384,11 @@ class StatrobGlobal:
             X_train = bootstrap(X_train)
             y_train = bootstrap(y_train)
         
+        print('Training the ensemble of models')
         results = train_K_mlps_in_parallel(X_train, y_train, X_test, y_test, K=k_mlps, n_jobs=1)
         self.models = [model for model, _, _, _, _ in results]
         self.models = [model for sublist in self.models for model in sublist]
+        print('Training the ensemble of models done')
         
     def __function_to_optimize(self, 
                                x: np.ndarray, 
@@ -397,14 +401,6 @@ class StatrobGlobal:
         Return the value of the function at a given point x
         '''
         assert beta_confidence > 0 and beta_confidence < 1, 'Confidence level must be between 0 and 1'
-        
-        # # Optimized function
-        # out = wrap_ensemble_crisp(x, self.models, method=method)
-        # out = out if target_class == 1 else 1 - out
-        # print(f'Out shape: {out.shape}')
-        
-        # print(f'Target class: {target_class}')
-        
         # Validity criterion
         blackbox_preds = self.blackbox.predict_crisp(x)
         if isinstance(blackbox_preds, torch.Tensor):
@@ -422,41 +418,25 @@ class StatrobGlobal:
         # Probabilistic outputs for beta CI test criterion
         preds = ensemble_predict_proba(self.models, x)
         preds = preds if target_class == 1 else 1 - preds
-        # print(f'Preds shape: {preds.shape}')
         
         test_mask = np.zeros(blackbox_preds.shape[0])
-        # beta_medians = np.empty_like(test_mask)
-        # beta_vars = np.empty_like(test_mask)
-        # beta_skews = np.empty_like(test_mask)
-        # beta_kurts = np.empty_like(test_mask)
         
         # Estimate beta parameters
         if preds.shape[1] > 1:
             for i in range(preds.shape[1]):
-                alpha, beta = estimate_beta_distribution(preds[:, i], method=beta_estim_method)
-                alpha = np.clip(alpha, 0, 100)
-                beta = np.clip(beta, 0, 100)
-                
-                left, _ = scipy.stats.beta.interval(beta_confidence, alpha, beta)
-                test_mask[i] = left > classification_threshold
-                # mean, var, skew, kurt = scipy.stats.beta.stats(alpha, beta, moments='mvsk')
-                # beta_medians[i] = mean
-                # beta_vars[i] = var
-                # beta_skews[i] = skew
-                # beta_kurts[i] = kurt
-
+                test_mask[i] = self.test_beta_credible_interval(
+                    preds[:, i], 
+                    confidence=beta_confidence, 
+                    thresh=classification_threshold,
+                    estimation_method=beta_estim_method
+                )
         else:
-            alpha, beta = estimate_beta_distribution(preds.flatten(), method=beta_estim_method)
-            alpha = np.clip(alpha, 0, 100)
-            beta = np.clip(beta, 0, 100)
-            left, _ = scipy.stats.beta.interval(beta_confidence, alpha, beta)
-            test_mask = left > classification_threshold
-            
-            # mean, var, skew, kurt = scipy.stats.beta.stats(alpha, beta, moments='mvsk')
-            # beta_medians = mean
-            # beta_vars = var
-            # beta_skews = skew
-            # beta_kurts = kurt
+            test_mask = self.test_beta_credible_interval(
+                preds.flatten(),
+                confidence=beta_confidence, 
+                thresh=classification_threshold,
+                estimation_method=beta_estim_method
+            )
             
         results = test_mask.astype(int) * blackbox_preds.astype(int)
         return results
@@ -487,18 +467,16 @@ class StatrobGlobal:
             classification_threshold=classification_threshold,
             beta_estim_method=estimation_method
         )
-            
         
-        if method == 'GS':
-            
+        if method == 'GS':   
             # Use hparams if provided, otherwise use defaults
             if opt_hparams is None:
                 opt_hparams = {}
             target_proba = opt_hparams['target_proba'] if 'target_proba' in opt_hparams else 0.5
             max_iter = opt_hparams['max_iter'] if 'max_iter' in opt_hparams else 100
-            n_search_samples = opt_hparams['n_search_samples'] if 'n_search_samples' in opt_hparams else 100
+            n_search_samples = opt_hparams['n_search_samples'] if 'n_search_samples' in opt_hparams else 1000
             p_norm = opt_hparams['p_norm'] if 'p_norm' in opt_hparams else 2
-            step = opt_hparams['step'] if 'step' in opt_hparams else 0.1
+            step = opt_hparams['step'] if 'step' in opt_hparams else 0.05
             
             gs_explainer = GrowingSpheresExplainer(
                 keys_mutable=self.preprocessor.X_train.columns.tolist(),
@@ -525,10 +503,12 @@ class StatrobGlobal:
         preds = ensemble_predict_proba(self.models, cf.reshape(1, -1))
         preds = preds if target_class == 1 else 1 - preds
         
-        if not self.test_beta_credible_interval(preds, confidence=desired_confidence, thresh=classification_threshold):
+        if not self.test_beta_credible_interval(preds.reshape(-1), confidence=desired_confidence, thresh=classification_threshold):
             print(f'Counterfactual does not pass the test!: \nCounterfactual {cf} \nPredictions: {preds.flatten()}')
             
         pred = self.blackbox.predict_crisp(cf.reshape(1, -1))
+        if isinstance(pred, torch.Tensor):
+            pred = int(pred.detach().numpy()[0])
         if pred != target_class:
             prob = self.blackbox.predict_proba(cf.reshape(1, -1))
             print(f'Counterfactual does not have the target class!: \nCounterfactual {cf} \nPrediction: {pred.flatten()}, should be class: {target_class}. Proba: {prob}')

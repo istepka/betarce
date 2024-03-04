@@ -1,7 +1,7 @@
 general:
   data_path: data/
   model_path: models/
-  result_path: results_testing/
+  result_path: results_testing_mar4/
   log_path: logs/
   random_state: 345
   logging_level: INFO
