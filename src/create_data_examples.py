@@ -532,7 +532,7 @@ def _compas(path: str = 'data/compas.csv') -> dict:
     
     return data
 
-def _moons(n_samples: int = 1000, noise: float = 0.1, random_state: int = 0) -> dict:
+def _moons(n_samples: int = 1000, noise: float = 0.2, random_state: int = 0) -> dict:
     '''
     Create two moons with the same number of samples and noise.
     

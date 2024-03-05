@@ -198,10 +198,10 @@ def train_K_mlps(X_train, y_train, X_test, y_test, K: int = 5, evaluate: bool = 
     f1s = []
     models = []
     for k in range(K):
-        layers = np.random.randint(3, 4)
+        layers = np.random.randint(3, 5)
         dims = np.random.choice([64,128], size=layers)
-        dropout = np.random.randint(1,3) / 10
-        mlp = MLPClassifier(input_dim=X_train.shape[1], hidden_dims=dims, activation='relu', dropout=dropout)
+        dropout = np.random.randint(1,5) / 10
+        mlp = MLPClassifier(input_dim=X_train.shape[1], hidden_dims=dims, activation='relu', dropout=dropout, seed=np.random.randint(1, 100) + k)
         mlp.fit(
             X_train, 
             y_train, 
@@ -209,7 +209,7 @@ def train_K_mlps(X_train, y_train, X_test, y_test, K: int = 5, evaluate: bool = 
             y_val=y_test,
             verbose=False,
             early_stopping=True,
-            lr=0.001,
+            lr=0.002,
             epochs=100
         )
         accuracy, recall, precision, f1 = mlp.evaluate(X_test, y_test)
@@ -282,9 +282,9 @@ def estimate_beta_distribution(
     
     match method:
         case 'MM': 
-            alpha, beta, _, _ = scipy.stats.beta.fit(sample, method='MM')
+            alpha, beta, _, _ = scipy.stats.beta.fit(sample, method='MM', floc=0, fscale=1)
         case 'MLE':
-            alpha, beta, _, _ = scipy.stats.beta.fit(sample, method='MLE')
+            alpha, beta, _, _ = scipy.stats.beta.fit(sample, method='MLE', floc=0, fscale=1)
         case _:
             raise ValueError(f'Estimation method not known: {method} should be either "MM" or "MLE"!')
     
@@ -310,8 +310,6 @@ def bootstrap(sample: np.ndarray, bootstrap_sample_size: int = 20):
 
 def test_with_CI(sample: np.ndarray, confidence, thresh: float = 0.5, estimation_method: str = 'MLE') -> bool:
     alpha, beta = estimate_beta_distribution(sample, method=estimation_method)
-    alpha = np.clip(alpha, 0, 50)
-    beta = np.clip(beta, 0, 50)
     left, right = scipy.stats.beta.interval(confidence, alpha, beta)
     return left > thresh
   
@@ -402,7 +400,7 @@ class StatrobGlobal:
         '''
         assert beta_confidence > 0 and beta_confidence < 1, 'Confidence level must be between 0 and 1'
         # Validity criterion
-        blackbox_preds = self.blackbox.predict_crisp(x)
+        blackbox_preds = self.blackbox.predict_crisp(x, classification_threshold)
         if isinstance(blackbox_preds, torch.Tensor):
             blackbox_preds = blackbox_preds.detach().numpy()
         blackbox_preds = blackbox_preds if target_class == 1 else 1 - blackbox_preds
@@ -474,7 +472,7 @@ class StatrobGlobal:
                 opt_hparams = {}
             target_proba = opt_hparams['target_proba'] if 'target_proba' in opt_hparams else 0.5
             max_iter = opt_hparams['max_iter'] if 'max_iter' in opt_hparams else 100
-            n_search_samples = opt_hparams['n_search_samples'] if 'n_search_samples' in opt_hparams else 1000
+            n_search_samples = opt_hparams['n_search_samples'] if 'n_search_samples' in opt_hparams else 100
             p_norm = opt_hparams['p_norm'] if 'p_norm' in opt_hparams else 2
             step = opt_hparams['step'] if 'step' in opt_hparams else 0.05
             
@@ -506,12 +504,12 @@ class StatrobGlobal:
         if not self.test_beta_credible_interval(preds.reshape(-1), confidence=desired_confidence, thresh=classification_threshold):
             print(f'Counterfactual does not pass the test!: \nCounterfactual {cf} \nPredictions: {preds.flatten()}')
             
-        pred = self.blackbox.predict_crisp(cf.reshape(1, -1))
+        pred = self.blackbox.predict_crisp(cf.reshape(1, -1), threshold=classification_threshold)
         if isinstance(pred, torch.Tensor):
             pred = int(pred.detach().numpy()[0])
         if pred != target_class:
             prob = self.blackbox.predict_proba(cf.reshape(1, -1))
-            print(f'Counterfactual does not have the target class!: \nCounterfactual {cf} \nPrediction: {pred.flatten()}, should be class: {target_class}. Proba: {prob}')
+            print(f'Counterfactual does not have the target class!: \nCounterfactual {cf} \nPrediction: {pred}, should be class: {target_class}. Proba: {prob}')
         
         return cf
     
