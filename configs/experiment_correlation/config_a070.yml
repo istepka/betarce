@@ -32,7 +32,7 @@ mlp-torch:
 
   
 robXHparams:
-  tau: 0.7
+  tau: 0.4
   variance: 0.01
   N: 1000
 
@@ -45,7 +45,7 @@ statrobHparams:
     max_iter: 100
     n_search_samples: 100
     p_norm: 2
-    step: 0.1
+    step: 0.05
     target_proba: 0.5
 
 experiment:

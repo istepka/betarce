@@ -32,14 +32,14 @@ mlp-torch:
 
   
 robXHparams:
-  tau: 0.5
-  variance: 0.01
+  tau: 0.3
+  variance: 0.1
   N: 1000
 
 statrobHparams:
   k_mlps: 32
   method: GS
-  beta_confidence: 0.75
+  beta_confidence: 0.95
   beta_estim_method: 'MLE'
   growingSpheresHparams:
     max_iter: 100

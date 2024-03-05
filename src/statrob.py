@@ -487,8 +487,10 @@ class StatrobGlobal:
         if pred_fn_crisp(start_sample)[0] == 1:
             print('The start sample is already a valid statrob counterfactual')
             artifact_dict['start_sample_passes_test'] = True
+            start_prds = ensemble_predict_proba(self.models, start_sample.reshape(1, -1))
+            start_prds = start_prds if target_class == 1 else 1 - start_prds
             artifact_dict['highest_confidence'] = self.find_highest_confidence(
-                self.blackbox.predict_crisp(start_sample, threshold=classification_threshold).detach().numpy().flatten(),
+                start_prds,
                 classification_threshold, 
                 estimation_method
             )
@@ -545,7 +547,7 @@ class StatrobGlobal:
             artifact_dict['counterfactual_does_not_have_target_class'] = True
             
         artifact_dict['highest_confidence'] = self.find_highest_confidence(
-                self.blackbox.predict_crisp(cf, threshold=classification_threshold).detach().numpy().flatten(),
+                preds,
                 classification_threshold, 
                 estimation_method
             )
@@ -590,6 +592,9 @@ class StatrobGlobal:
             - beta_estim_method: str, the estimation method for the beta distribution parameters
             - granularity: float, the granularity of the search
         '''
+        preds = preds.flatten()
+        # print(f'Preds: {preds}')
+        preds = np.clip(preds, 1e-5, 1 - 1e-5)
         alpha, beta = estimate_beta_distribution(preds, method=beta_estim_method)
         confidence = 0.99
         while confidence > 0:            

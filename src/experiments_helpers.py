@@ -12,7 +12,7 @@ from copy import deepcopy
 import wandb
 from tqdm import tqdm
 import time
-from sklearn.neighbors import LocalOutlierFactor
+from sklearn.neighbors import LocalOutlierFactor, NearestNeighbors
 from sklearn.metrics import accuracy_score
 import warnings
 import joblib
@@ -136,11 +136,12 @@ class SameSampleExperimentData(ExperimentDataBase):
 
     
 class ExperimentResults:
-    def __init__(self) -> None:
+    def __init__(self, expected_size: int | None = None) -> None:
         self.results = defaultdict(list)
         self.records = defaultdict(list)
-        self.artifacts = {}
+        self.artifacts = defaultdict(list)
         self.wandb_run = wandb.run
+
         
     def add_metric(self, metric: str, value: float) -> None:
         self.results[metric].append(value)
@@ -151,7 +152,7 @@ class ExperimentResults:
             wandb.log({metric: value})
     
     def add_artifact(self, key: str, value: object) -> None:
-        self.artifacts[key] = value
+        self.artifacts[key].append(value)
         
         if self.wandb_run:
             art = wandb.Artifact(
@@ -218,11 +219,11 @@ class ExperimentResults:
         print(self.__str__())
         print('#' * 30 + ' Metrics ' + '#' * 30)
         # robust_metrics = [k for k in self.results.keys() if 'robust' in k]
-        r_2 = [k for k in self.results.keys() if 'robust' in k and '2' in k]
-        r_1 = [k for k in self.results.keys() if 'robust' in k and '2' not in k]
+        r_2 = [k for k in self.results.keys() if 'robust' in k and '_2' in k]
+        r_1 = [k for k in self.results.keys() if 'robust' in k and '_2' not in k]
         # base_metrics = [k for k in self.results.keys() if 'robust' not in k]
-        b_2 = [k for k in self.results.keys() if 'robust' not in k and '2' in k]
-        b_1 = [k for k in self.results.keys() if 'robust' not in k and '2' not in k]
+        b_2 = [k for k in self.results.keys() if 'robust' not in k and '_2' in k]
+        b_1 = [k for k in self.results.keys() if 'robust' not in k and '_2' not in k]
         print('-' * 25 + ' Base metrics ' + '-' * 25)
         for k in b_1:
             print(f'{k}: {self.get_mean_for_metric(k):.2f} (std: {self.get_std_for_metric(k):.2f})')
@@ -296,8 +297,16 @@ class ExperimentBase:
         self.results: ExperimentResults = ExperimentResults()
         self.prep_done: bool = False
         
-        self.lof_model: LocalOutlierFactor
-        self.lof_model2: LocalOutlierFactor
+        self.lof_model: LocalOutlierFactor = LocalOutlierFactor(n_neighbors=50, novelty=True, p=1)
+        self.lof_model2: LocalOutlierFactor = LocalOutlierFactor(n_neighbors=50, novelty=True, p=1)
+        
+        self.nearest_neighbors: NearestNeighbors = NearestNeighbors(n_neighbors=15, algorithm='ball_tree')
+        self.nearest_neighbors2: NearestNeighbors = NearestNeighbors(n_neighbors=15, algorithm='ball_tree')
+        
+        
+        
+        
+        
         
     def prepare(self):
         raise NotImplementedError('Method not implemented.')
@@ -326,13 +335,23 @@ class ExperimentBase:
         y_test = self.y_test1
         model = self.model1
         
+        # Prepare the results object, with the expected size, which will speed up the process
+        self.results = ExperimentResults(expected_size = stop_after if stop_after else len(X_test))
         
+        
+        self.lof_model.fit(self.X_train1.to_numpy())
+        self.lof_model2.fit(self.X_train2.to_numpy())
+        self.nearest_neighbors.fit(self.X_train1.to_numpy())
+        self.nearest_neighbors2.fit(self.X_train2.to_numpy())
         
         empty_metrics = {
             'validity': np.nan,
             'proximityL1': np.nan,
+            'proximityL2': np.nan,
             'lof': np.nan,
-            'cf_counterfactual_stability': np.nan
+            'cf_counterfactual_stability': np.nan,
+            'dpow': np.nan,
+            'plausibility': np.nan
         }
         
         X_train_w_target = X_train.copy()
@@ -462,7 +481,10 @@ class ExperimentBase:
                     cf = cf_numpy,
                     cf_desired_class=1 - orig_y,
                     x = x_numpy,
+                    X_train=X_train.to_numpy(),
+                    y_train=y_train,
                     lof_model = self.lof_model,
+                    nearest_neighbors_model=self.nearest_neighbors,
                     predict_fn = self.predict_fn_1,
                     robXHparams = self.robXHparams
                 )
@@ -471,7 +493,10 @@ class ExperimentBase:
                     cf = cf_numpy,
                     cf_desired_class=1 - orig_y,
                     x = x_numpy,
+                    X_train=self.X_train2.to_numpy(),
+                    y_train=self.y_train2,
                     lof_model = self.lof_model2,
+                    nearest_neighbors_model=self.nearest_neighbors2,
                     predict_fn = self.predict_fn_2,
                     robXHparams = self.robXHparams
                 )    
@@ -483,7 +508,7 @@ class ExperimentBase:
                 
             self.results.add_metric('generation_time', generation_time)
                 
-            # ROBX PART      
+            # FIND ROBUST COUNTERFACTUAL    
             start_time = time.time()
             try:
                 match robust_method:
@@ -497,13 +522,14 @@ class ExperimentBase:
                             N = self.robXHparams['N'],
                         )
                     case 'statrob':
-                        robust_cf = statrobExplainer.optimize(
+                        robust_cf, artifacts_dict = statrobExplainer.optimize(
                             start_sample=cf_numpy.reshape(1, -1),
                             target_class=1 - orig_y,
                             method=self.config.get_config_by_key('statrobHparams')['method'],
                             desired_confidence=self.config.get_config_by_key('statrobHparams')['beta_confidence'],
                             opt_hparams=self.config.get_config_by_key('statrobHparams')['growingSpheresHparams']
                         )
+                        self.results.add_record('artifacts', artifacts_dict)
                     case 'statrobxplus':
                         robust_cf = statrobxplusExplainer.optimize(
                             start_sample=cf_numpy.reshape(1, -1),
@@ -525,7 +551,10 @@ class ExperimentBase:
                     cf = robust_cf.flatten(),
                     cf_desired_class=cf_desired_class,
                     x = x_numpy,
+                    X_train=X_train.to_numpy(),
+                    y_train=y_train,
                     lof_model = self.lof_model,
+                    nearest_neighbors_model=self.nearest_neighbors,
                     predict_fn = self.predict_fn_1,
                     robXHparams = self.robXHparams
                 )
@@ -534,7 +563,10 @@ class ExperimentBase:
                     cf = robust_cf.flatten(),
                     cf_desired_class=cf_desired_class,
                     x = x_numpy,
+                    X_train=self.X_train2.to_numpy(),
+                    y_train=self.y_train2,
                     lof_model = self.lof_model2,
+                    nearest_neighbors_model=self.nearest_neighbors2,
                     predict_fn = self.predict_fn_2,
                     robXHparams = self.robXHparams
                 )
@@ -565,7 +597,10 @@ class ExperimentBase:
     def calculate_metrics(self, cf: np.ndarray, 
                           cf_desired_class: int,
                           x: np.ndarray, 
+                          X_train: np.ndarray,
+                          y_train: np.ndarray,
                           lof_model: LocalOutlierFactor,
+                          nearest_neighbors_model: NearestNeighbors,
                           predict_fn: callable,
                           robXHparams: dict
         ) -> dict:
@@ -576,7 +611,10 @@ class ExperimentBase:
             - cf: (np.ndarray) The counterfactual example.
             - cf_desired_class: (int) The desired class of the counterfactual example.
             - x: (np.ndarray) The original instance.
+            - X_train: (np.ndarray) The training data.
+            - y_train: (np.ndarray) The training labels.
             - lof_model: (object) The Local Outlier Factor model.
+            - nearest_neighbors_model: (object) The Nearest Neighbors model.
             - predict_fn: (function) The function to be used for predictions.
             - robXHparams: (dict) The hyperparameters for the RobustX algorithm.
         
@@ -585,18 +623,41 @@ class ExperimentBase:
         '''
         
         cf_label = predict_fn(cf)[0] > self.class_threshold
+        
+        # Validity
         validity = int(int(cf_label) == cf_desired_class)
+        
+        # Proximity L1
         proximityL1 = np.sum(np.abs(x - cf))
+        
+        # Proximity L2
+        proximityL2 = np.sqrt(np.sum(np.square(x - cf)))
+        
+        # LOF
         lof = lof_model.score_samples(cf.reshape(1, -1))[0]
+        
+        # Counterfactual stability
         cf_counterfactual_stability = counterfactual_stability(
             cf, predict_fn, robXHparams['variance'], robXHparams['N']
         )
         
+        # Discriminative Power (fraction of neighbors with the same label as the counterfactual)
+        neigh_indices = nearest_neighbors_model.kneighbors(cf.reshape(1, -1), return_distance=False, n_neighbors=15)
+        neigh_labels = y_train[neigh_indices[0]]
+        dpow = np.sum(neigh_labels == cf_label) / len(neigh_labels) # The fraction of neighbors with the same label as the counterfactual
+        
+        # Plausibility (average distance to the 50 nearest neighbors in the training data)
+        neigh_dist, _ = nearest_neighbors_model.kneighbors(cf.reshape(1, -1), return_distance=True, n_neighbors=50)
+        plausibility = np.mean(neigh_dist[0])
+        
         return {
             'validity': validity,
             'proximityL1': proximityL1,
+            'proximityL2': proximityL2,
             'lof': lof,
-            'cf_counterfactual_stability': cf_counterfactual_stability
+            'cf_counterfactual_stability': cf_counterfactual_stability,
+            'dpow': dpow,
+            'plausibility': plausibility
         }
     
     def log_artifact(self, key: str, value: object) -> None:
