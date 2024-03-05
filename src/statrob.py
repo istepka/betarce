@@ -184,14 +184,18 @@ class MLPClassifier(nn.Module):
         
         return accuracy, recall, precision, f1
 
-def train_K_mlps(X_train, y_train, X_test, y_test, K: int = 5, evaluate: bool = True):
+def train_K_mlps(X_train, y_train, X_test, y_test, K: int = 5, evaluate: bool = True, bootstrap: bool = True):
     '''
     X_train: np.array, training data
     y_train: np.array, training labels
     X_test: np.array, test data
     y_test: np.array, test labels
     K: int, number of models to train
+    bootstrap: bool, whether to use bootstrapping
     '''
+    if bootstrap:
+        X_train, y_train = bootstrap_data(X_train, y_train)
+    
     accuracies = []
     recalls = []
     precisions = []
@@ -221,7 +225,7 @@ def train_K_mlps(X_train, y_train, X_test, y_test, K: int = 5, evaluate: bool = 
     print(f'Average accuracy: {np.mean(accuracies)}, Average recall: {np.mean(recalls)}, Average precision: {np.mean(precisions)}, Average f1: {np.mean(f1s)}')
     return models, accuracies, recalls, precisions, f1s
 
-def train_K_mlps_in_parallel(X_train, y_train, X_test, y_test, K: int = 20, n_jobs: int = 4):
+def train_K_mlps_in_parallel(X_train, y_train, X_test, y_test, K: int = 20, n_jobs: int = 4, bootstrap: bool = True):
     '''
     X_train: np.array, training data
     y_train: np.array, training labels
@@ -229,12 +233,13 @@ def train_K_mlps_in_parallel(X_train, y_train, X_test, y_test, K: int = 20, n_jo
     y_test: np.array, test labels
     K: int, number of models to train
     n_jobs: int, number of jobs to run in parallel
+    bootstrap: bool, whether to use bootstrapping
     '''
     
     k_for_each_job = K // n_jobs 
     
     results = Parallel(n_jobs=n_jobs)(
-        delayed(train_K_mlps)(X_train, y_train, X_test, y_test, k_for_each_job) for _ in range(n_jobs)
+        delayed(train_K_mlps)(X_train, y_train, X_test, y_test, k_for_each_job, bootstrap=bootstrap) for _ in range(n_jobs)
     )
     return results
 
@@ -294,7 +299,7 @@ def estimate_beta_distribution(
 def bootstrap_buckets(sample: np.ndarray, bootstrap_sample_size: int = 20, buckets: int = 30):
     return np.random.choice(sample, size=(buckets, bootstrap_sample_size), replace=True)
 
-def bootstrap(sample: np.ndarray, bootstrap_sample_size_frac: int = 0.8):
+def bootstrap_data(X: np.ndarray, y: np.ndarray, bootstrap_sample_size_frac: int = 0.8) -> tuple[np.ndarray, np.ndarray]:
     '''
     Bootstrap the sample
     
@@ -305,10 +310,10 @@ def bootstrap(sample: np.ndarray, bootstrap_sample_size_frac: int = 0.8):
     Returns:
         - np.ndarray, the bootstrapped sample
     '''
-    range_indices = np.arange(len(sample))
-    size = int(len(sample) * bootstrap_sample_size_frac)
+    range_indices = np.arange(len(X))
+    size = int(len(X) * bootstrap_sample_size_frac)
     indices = np.random.choice(range_indices, size=size, replace=False)
-    return sample[indices]
+    return X[indices], y[indices]
 
 def test_with_CI(sample: np.ndarray, confidence, thresh: float = 0.5, estimation_method: str = 'MLE') -> bool:
     alpha, beta = estimate_beta_distribution(sample, method=estimation_method)
@@ -380,12 +385,8 @@ class StatrobGlobal:
         '''
         X_train, X_test, y_train, y_test = self.preprocessor.get_numpy()
         
-        if _bootstrap:
-            X_train = bootstrap(X_train)
-            y_train = bootstrap(y_train)
-        
         print('Training the ensemble of models')
-        results = train_K_mlps_in_parallel(X_train, y_train, X_test, y_test, K=k_mlps, n_jobs=1)
+        results = train_K_mlps_in_parallel(X_train, y_train, X_test, y_test, K=k_mlps, n_jobs=1, bootstrap=_bootstrap)
         self.models = [model for model, _, _, _, _ in results]
         self.models = [model for sublist in self.models for model in sublist]
         print('Training the ensemble of models done')
@@ -450,7 +451,7 @@ class StatrobGlobal:
                  classification_threshold: float = 0.5,
                  estimation_method: str = 'MLE',
                  opt_hparams: dict = None
-        ) -> np.ndarray:
+        ) -> tuple[np.ndarray, dict]:
         '''
         Optimize the input example
         
@@ -461,7 +462,19 @@ class StatrobGlobal:
             - desired_confidence: float, the desired confidence level
             - classification_threshold: float, the classification threshold
             - opt_hparams: dict, the optimization hyperparameters. If None, use defaults defined in the method
+            
+        Returns:
+            - np.ndarray, the optimized input example
+            - dict, some additional information if any
         '''
+        
+        artifact_dict = {
+            'start_sample_passes_test': False,
+            'counterfactual_does_not_pass_test': False,
+            'counterfactual_does_not_have_target_class': False,
+            'counterfactual_is_nan': False,
+            'highest_confidence': np.nan,
+        }
         
         pred_fn_crisp = lambda x: self.__function_to_optimize(x, 
             target_class=target_class, 
@@ -473,7 +486,13 @@ class StatrobGlobal:
         # Check if the start sample is already a valid counterfactual
         if pred_fn_crisp(start_sample)[0] == 1:
             print('The start sample is already a valid statrob counterfactual')
-            return start_sample
+            artifact_dict['start_sample_passes_test'] = True
+            artifact_dict['highest_confidence'] = self.find_highest_confidence(
+                self.blackbox.predict_crisp(start_sample, threshold=classification_threshold).detach().numpy().flatten(),
+                classification_threshold, 
+                estimation_method
+            )
+            return start_sample, artifact_dict
             
         
         
@@ -506,7 +525,8 @@ class StatrobGlobal:
         
         if cf is None or np.any(np.isnan(cf)):
             print(f'Counterfactual is not valid!: {cf}')
-            return None
+            artifact_dict['counterfactual_is_nan'] = True
+            return None, artifact_dict
         
         # Posthoc check if the counterfactual is valid
         preds = ensemble_predict_proba(self.models, cf.reshape(1, -1))
@@ -514,6 +534,7 @@ class StatrobGlobal:
         
         if not self.test_beta_credible_interval(preds.reshape(-1), confidence=desired_confidence, thresh=classification_threshold):
             print(f'Counterfactual does not pass the test!: \nCounterfactual {cf} \nPredictions: {preds.flatten()}')
+            artifact_dict['counterfactual_does_not_pass_test'] = True
             
         pred = self.blackbox.predict_crisp(cf.reshape(1, -1), threshold=classification_threshold)
         if isinstance(pred, torch.Tensor):
@@ -521,8 +542,15 @@ class StatrobGlobal:
         if pred != target_class:
             prob = self.blackbox.predict_proba(cf.reshape(1, -1))
             print(f'Counterfactual does not have the target class!: \nCounterfactual {cf} \nPrediction: {pred}, should be class: {target_class}. Proba: {prob}')
+            artifact_dict['counterfactual_does_not_have_target_class'] = True
+            
+        artifact_dict['highest_confidence'] = self.find_highest_confidence(
+                self.blackbox.predict_crisp(cf, threshold=classification_threshold).detach().numpy().flatten(),
+                classification_threshold, 
+                estimation_method
+            )
         
-        return cf
+        return cf, artifact_dict
     
     def test_beta_credible_interval(self, 
             sample: np.ndarray, 
@@ -547,6 +575,34 @@ class StatrobGlobal:
         result = test_with_CI(_sample, confidence, thresh, estimation_method)
         return result
     
+    def find_highest_confidence(self, 
+            preds: np.ndarray, 
+            classification_threshold: float, 
+            beta_estim_method: str = 'MLE',
+            granularity: float = 0.01
+        ) -> float:
+        '''
+        Find the highest confidence level at which the beta distribution test passes
+        
+        Parameters:
+            - preds: np.ndarray, the array of predictions, has to be between (0,1) (exclusive)
+            - classification_threshold: float, the classification threshold
+            - beta_estim_method: str, the estimation method for the beta distribution parameters
+            - granularity: float, the granularity of the search
+        '''
+        alpha, beta = estimate_beta_distribution(preds, method=beta_estim_method)
+        confidence = 0.99
+        while confidence > 0:            
+            left, _ = scipy.stats.beta.interval(confidence, alpha, beta)
+            if left > classification_threshold:
+                return confidence
+            
+            confidence -= granularity
+            
+        return 0
+                
+            
+        
     
 class StatRobXPlus:
     def __init__(self, dataset: Dataset, 
@@ -575,11 +631,7 @@ class StatRobXPlus:
         '''
         X_train, X_test, y_train, y_test = self.preprocessor.get_numpy()
         
-        if _bootstrap:
-            X_train = bootstrap(X_train)
-            y_train = bootstrap(y_train)
-        
-        results = train_K_mlps_in_parallel(X_train, y_train, X_test, y_test, K=k_mlps, n_jobs=1)
+        results = train_K_mlps_in_parallel(X_train, y_train, X_test, y_test, K=k_mlps, n_jobs=1, bootstrap=_bootstrap)
         self.models = [model for model, _, _, _, _ in results]
         self.models = [model for sublist in self.models for model in sublist]
         

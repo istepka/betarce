@@ -1,6 +1,6 @@
 
 CONFIGS_PATH=configs/experiment_correlation
-ALPHAS=(060 070 080 090)
+ALPHAS=(060 065 070 075 080 090 095 099 09999)
 
 for ALPHA in ${ALPHAS[@]}
 do
@@ -8,7 +8,7 @@ do
     CONFIG="$CONFIGS_PATH/$CONFIG_BASENAME"
 
     DATASET=wine_quality #choices: [fico, german, wine_quality, breast_cancer]
-    STOP_AFTER=100
+    STOP_AFTER=900
     ROBUST_METHOD=statrob #choices: [statrob, robx, statrobxplus]
     EXPERIMENT_TYPE=SameSampleExperimentData #choices: [TwoSamplesOneDatasetExperimentData, SameSampleExperimentData]
     MODEL_TYPE=mlp-torch #choices: [mlp-sklearn, rf-sklearn, mlp-torch]
