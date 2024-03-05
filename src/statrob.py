@@ -218,6 +218,7 @@ def train_K_mlps(X_train, y_train, X_test, y_test, K: int = 5, evaluate: bool = 
         precisions.append(precision)
         f1s.append(f1)
         models.append(mlp)
+    print(f'Average accuracy: {np.mean(accuracies)}, Average recall: {np.mean(recalls)}, Average precision: {np.mean(precisions)}, Average f1: {np.mean(f1s)}')
     return models, accuracies, recalls, precisions, f1s
 
 def train_K_mlps_in_parallel(X_train, y_train, X_test, y_test, K: int = 20, n_jobs: int = 4):
@@ -293,19 +294,20 @@ def estimate_beta_distribution(
 def bootstrap_buckets(sample: np.ndarray, bootstrap_sample_size: int = 20, buckets: int = 30):
     return np.random.choice(sample, size=(buckets, bootstrap_sample_size), replace=True)
 
-def bootstrap(sample: np.ndarray, bootstrap_sample_size: int = 20):
+def bootstrap(sample: np.ndarray, bootstrap_sample_size_frac: int = 0.8):
     '''
     Bootstrap the sample
     
     Parameters:
         - sample: np.ndarray, the sample to bootstrap
-        - bootstrap_sample_size: int, the size of the bootstrap sample
+        - bootstrap_sample_size_frac: float, the fraction of the sample to use for bootstrapping
         
     Returns:
         - np.ndarray, the bootstrapped sample
     '''
     range_indices = np.arange(len(sample))
-    indices = np.random.choice(range_indices, size=bootstrap_sample_size, replace=True)
+    size = int(len(sample) * bootstrap_sample_size_frac)
+    indices = np.random.choice(range_indices, size=size, replace=False)
     return sample[indices]
 
 def test_with_CI(sample: np.ndarray, confidence, thresh: float = 0.5, estimation_method: str = 'MLE') -> bool:
@@ -405,6 +407,7 @@ class StatrobGlobal:
             blackbox_preds = blackbox_preds.detach().numpy()
         blackbox_preds = blackbox_preds if target_class == 1 else 1 - blackbox_preds
         # print(f'Blackbox prediction: {blackbox_preds.shape}, {blackbox_preds.mean()} {blackbox_preds.flatten().round(3)} {self.blackbox.predict_proba(x).detach().numpy().flatten().round(3)}')
+        # print('Blackbox preds shape', blackbox_preds.shape)
         
         # Skip if the blackbox predicts the wrong class
         if np.all(blackbox_preds == 0):
@@ -416,6 +419,7 @@ class StatrobGlobal:
         # Probabilistic outputs for beta CI test criterion
         preds = ensemble_predict_proba(self.models, x)
         preds = preds if target_class == 1 else 1 - preds
+        # print('Preds shape', preds.shape) 
         
         test_mask = np.zeros(blackbox_preds.shape[0])
         
@@ -436,8 +440,8 @@ class StatrobGlobal:
                 estimation_method=beta_estim_method
             )
             
-        results = test_mask.astype(int) * blackbox_preds.astype(int)
-        return results
+        results = test_mask.astype(bool) & blackbox_preds.astype(bool)
+        return results.astype(int)
         
     def optimize(self, start_sample: np.ndarray, 
                  target_class: int, 
@@ -466,15 +470,22 @@ class StatrobGlobal:
             beta_estim_method=estimation_method
         )
         
+        # Check if the start sample is already a valid counterfactual
+        if pred_fn_crisp(start_sample)[0] == 1:
+            print('The start sample is already a valid statrob counterfactual')
+            return start_sample
+            
+        
+        
         if method == 'GS':   
             # Use hparams if provided, otherwise use defaults
             if opt_hparams is None:
                 opt_hparams = {}
             target_proba = opt_hparams['target_proba'] if 'target_proba' in opt_hparams else 0.5
             max_iter = opt_hparams['max_iter'] if 'max_iter' in opt_hparams else 100
-            n_search_samples = opt_hparams['n_search_samples'] if 'n_search_samples' in opt_hparams else 100
+            n_search_samples = opt_hparams['n_search_samples'] if 'n_search_samples' in opt_hparams else 1000
             p_norm = opt_hparams['p_norm'] if 'p_norm' in opt_hparams else 2
-            step = opt_hparams['step'] if 'step' in opt_hparams else 0.05
+            step = opt_hparams['step'] if 'step' in opt_hparams else 0.1
             
             gs_explainer = GrowingSpheresExplainer(
                 keys_mutable=self.preprocessor.X_train.columns.tolist(),
@@ -513,11 +524,27 @@ class StatrobGlobal:
         
         return cf
     
-    def test_beta_credible_interval(self, sample: np.ndarray, confidence, thresh: float = 0.5, estimation_method: str = 'MLE') -> bool:
+    def test_beta_credible_interval(self, 
+            sample: np.ndarray, 
+            confidence, thresh: float = 0.5, 
+            estimation_method: str = 'MLE',
+            epsilon: float = 1e-5
+        ) -> bool:
         '''
         Test the beta distribution
+        
+        Parameters:
+        - sample: np.ndarray, the array of predictions, has to be between (0,1) (exclusive)
+        - confidence: float, the confidence level
+        - thresh: float, the classification threshold
+        - estimation_method: str, the estimation method for the beta distribution parameters
+        - epsilon: float, the epsilon to clip the predictions. This is used to avoid zero or one values in the predictions,
+                    which would make the beta distribution estimation impossible.
         '''
-        result = test_with_CI(sample, confidence, thresh, estimation_method)
+        # print('Sample to fit beta:', sample.tolist())
+        _sample = np.clip(sample, epsilon, 1 - epsilon)
+        
+        result = test_with_CI(_sample, confidence, thresh, estimation_method)
         return result
     
     
