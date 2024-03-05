@@ -1,37 +1,42 @@
 CONFIGS_PATH=configs/experiment_correlation
-ALPHAS=(060 065 070 075 080 085 090 093 095 097 099 09999)
+ALPHAS=(060 065 070 075 080 090 095 099 09999)
 DATASETS=("fico" "wine_quality" "breast_cancer")
 EXPERIMENT_TYPES=("TwoSamplesOneDatasetExperimentData" "SameSampleExperimentData")
+BASE_CF_METHODS=("gs" "dice")
 
-for DATASET in "${DATASETS[@]}"
+for BASE_CF_METHOD in "${BASE_CF_METHODS[@]}"
 do
-    for EXPERIMENT_TYPE in "${EXPERIMENT_TYPES[@]}"
+    for DATASET in "${DATASETS[@]}"
     do
-        for ALPHA in "${ALPHAS[@]}"
+        for EXPERIMENT_TYPE in "${EXPERIMENT_TYPES[@]}"
         do
-            CONFIG_BASENAME="config_a${ALPHA}.yml"
-            CONFIG="$CONFIGS_PATH/$CONFIG_BASENAME"
+            for ALPHA in "${ALPHAS[@]}"
+            do
+                CONFIG_BASENAME="config_a${ALPHA}.yml"
+                CONFIG="$CONFIGS_PATH/$CONFIG_BASENAME"
 
-            STOP_AFTER=1000
-            ROBUST_METHOD=robx #choices: [statrob, robx, statrobxplus]
-            MODEL_TYPE=mlp-torch #choices: [mlp-sklearn, rf-sklearn, mlp-torch]
+                STOP_AFTER=1000
+                ROBUST_METHOD=robx #choices: [statrob, robx, statrobxplus]
+                MODEL_TYPE=mlp-torch #choices: [mlp-sklearn, rf-sklearn, mlp-torch]
 
-            # Construct the NAME variable
-            NAME="$MODEL_TYPE-$DATASET-$ROBUST_METHOD-$EXPERIMENT_TYPE-$CONFIG_BASENAME"
+                # Construct the NAME variable
+                NAME="$MODEL_TYPE-$DATASET-$ROBUST_METHOD-$EXPERIMENT_TYPE-$BASE_CF_METHOD-$CONFIG_BASENAME"
 
-            echo "Running experiment with name: $NAME"
+                echo "Running experiment with name: $NAME"
 
-            source activate robustcf
+                source activate robustcf
 
-            python src/run_experiments.py --dataset $DATASET \
-                                            --experiment $NAME  \
-                                            --stop_after $STOP_AFTER \
-                                            --config $CONFIG \
-                                            --robust_method $ROBUST_METHOD \
-                                            --experiment_type $EXPERIMENT_TYPE \
-                                            --model_type $MODEL_TYPE
+                python src/run_experiments.py --dataset $DATASET \
+                                                --experiment $NAME  \
+                                                --stop_after $STOP_AFTER \
+                                                --config $CONFIG \
+                                                --robust_method $ROBUST_METHOD \
+                                                --experiment_type $EXPERIMENT_TYPE \
+                                                --model_type $MODEL_TYPE \
+                                                --base_cf_method $BASE_CF_METHOD
 
-            conda deactivate
+                conda deactivate
+            done
         done
     done
 done

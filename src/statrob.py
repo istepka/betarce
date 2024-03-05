@@ -72,7 +72,7 @@ class MLPClassifier(nn.Module):
     
     def predict_proba(self, x):
         x = array_to_tensor(x)
-        return self.forward(x).flatten()
+        return self.forward(x).detach().numpy()
     
     def predict_crisp(self, x, threshold=0.5):
         x = array_to_tensor(x)
@@ -81,7 +81,7 @@ class MLPClassifier(nn.Module):
         if isinstance(pred, np.ndarray):
             pred = array_to_tensor(pred)
             
-        return (pred > threshold).int()
+        return (pred > threshold).int().detach().numpy()
     
     def fit(self, 
             X_train: Union[np.array, torch.Tensor],
@@ -177,7 +177,7 @@ class MLPClassifier(nn.Module):
         X_test = array_to_tensor(X_test, device=device)
         y_test = array_to_tensor(y_test, device=device)
         y_pred = self.predict_crisp(X_test)
-        accuracy = (y_pred == y_test).sum().item() / len(y_test)
+        accuracy = accuracy_score(y_test, y_pred)
         recall = recall_score(y_test, y_pred, average='binary')
         precision = precision_score(y_test, y_pred, average='binary')
         f1 = f1_score(y_test, y_pred, average='binary')
@@ -251,7 +251,7 @@ def ensemble_predict_proba(models: list[nn.Module], X: Union[np.ndarray, torch.T
     predictions = []
     X_tensor = array_to_tensor(X)
     for model in models:
-        predictions.append(model.predict_proba(X_tensor).detach().numpy())
+        predictions.append(model.predict_proba(X_tensor))
     predictions = np.array(predictions)
     return predictions
                     
@@ -541,6 +541,8 @@ class StatrobGlobal:
         pred = self.blackbox.predict_crisp(cf.reshape(1, -1), threshold=classification_threshold)
         if isinstance(pred, torch.Tensor):
             pred = int(pred.detach().numpy()[0])
+        if isinstance(pred, np.ndarray):
+            pred = int(pred[0])
         if pred != target_class:
             prob = self.blackbox.predict_proba(cf.reshape(1, -1))
             print(f'Counterfactual does not have the target class!: \nCounterfactual {cf} \nPrediction: {pred}, should be class: {target_class}. Proba: {prob}')

@@ -224,6 +224,8 @@ class ExperimentResults:
         # base_metrics = [k for k in self.results.keys() if 'robust' not in k]
         b_2 = [k for k in self.results.keys() if 'robust' not in k and '_2' in k]
         b_1 = [k for k in self.results.keys() if 'robust' not in k and '_2' not in k]
+        # The rest of the metrics
+        rest = [k for k in self.results.keys() if k not in r_2 + r_1 + b_2 + b_1]
         print('-' * 25 + ' Base metrics ' + '-' * 25)
         for k in b_1:
             print(f'{k}: {self.get_mean_for_metric(k):.2f} (std: {self.get_std_for_metric(k):.2f})')
@@ -235,6 +237,9 @@ class ExperimentResults:
             print(f'{k}: {self.get_mean_for_metric(k):.2f} (std: {self.get_std_for_metric(k):.2f})')
         print('-' * 25 + ' Robust metrics 2 ' + '-' * 25)
         for k in r_2:
+            print(f'{k}: {self.get_mean_for_metric(k):.2f} (std: {self.get_std_for_metric(k):.2f})')
+        print('-' * 25 + ' Rest of the metrics ' + '-' * 25)
+        for k in rest:
             print(f'{k}: {self.get_mean_for_metric(k):.2f} (std: {self.get_std_for_metric(k):.2f})')
         print('#' * 80)
         
@@ -452,6 +457,7 @@ class ExperimentBase:
                             desired_class= 1 - orig_y,
                             classification_threshold=self.class_threshold,
                         )
+                        print('DICE')
                     case 'wachter':
                         base_cf = explainer.generate(
                             query_instance=orig_x,
@@ -583,6 +589,14 @@ class ExperimentBase:
             self.results.add_record('robust_cf', robust_cf)
             self.results.add_record('orig_x', orig_x)
             self.results.add_record('orig_y', orig_y)
+            
+            # Calculate the L1&L2&CosineSim distance of the robust counterfactual to the base counterfactual
+            if robust_cf is not None and base_cf is not None:
+                self.results.add_metric('robust_cf_to_base_cf_proximity_L1', np.sum(np.abs(robust_cf - base_cf)))
+                self.results.add_metric('robust_cf_to_base_cf_proximity_L2', np.sqrt(np.sum(np.square(robust_cf - base_cf))))
+            else:
+                self.results.add_metric('robust_cf_to_base_cf_proximity_L1', np.nan)
+                self.results.add_metric('robust_cf_to_base_cf_proximity_L2', np.nan)
             
             if stop_after and j >= stop_after:
                 print(f'Stopping after {stop_after} iterations.')
@@ -804,8 +818,8 @@ class TwoDatasetsExperiment(ExperimentBase):
                 verbose=hparams['verbose'],
                 early_stopping=hparams['early_stopping'],
             )
-            self.predict_fn_1 = lambda x: self.model1.predict_proba(x).detach().numpy()
-            self.predict_fn_1_crisp = lambda x: self.model1.predict_crisp(x, threshold=self.class_threshold).detach().numpy()
+            self.predict_fn_1 = lambda x: self.model1.predict_proba(x)
+            self.predict_fn_1_crisp = lambda x: self.model1.predict_crisp(x, threshold=self.class_threshold)
             
             self.model2 = MLPClassifier(
                 input_dim=self.X_train2.shape[1],
@@ -826,8 +840,8 @@ class TwoDatasetsExperiment(ExperimentBase):
                 early_stopping=hparams['early_stopping'],
             )
             
-            self.predict_fn_2 = lambda x: self.model2.predict_proba(x).detach().numpy()
-            self.predict_fn_2_crisp = lambda x: self.model2.predict_crisp(x, threshold=self.class_threshold).detach().numpy()
+            self.predict_fn_2 = lambda x: self.model2.predict_proba(x)
+            self.predict_fn_2_crisp = lambda x: self.model2.predict_crisp(x, threshold=self.class_threshold)
             
         else:
             raise ValueError('model_type unsupported')
