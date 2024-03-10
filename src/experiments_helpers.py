@@ -603,8 +603,9 @@ class ExperimentBase:
                 break
             
             # Save the results to file after each iteration to avoid losing data
-            results_dir = self.config.get_config_by_key('result_path')
-            self.results.save_to_file(f'{results_dir}/{self.custom_experiment_name}.joblib')
+            if j % 30 == 0 or j == len(X_test) - 1 or j == stop_after - 1:
+                results_dir = self.config.get_config_by_key('result_path')
+                self.results.save_to_file(f'{results_dir}/{self.custom_experiment_name}.joblib')
             
         return True
     
