@@ -273,6 +273,24 @@ class ExperimentResults:
             return None    
 
 
+    def add_experiment_results(self, other) -> None:
+        '''
+        Adds the results of another experiment to this one.
+        
+        Parameters:
+            - other: (ExperimentResults) The other experiment.
+        '''
+        assert isinstance(other, ExperimentResults), f'other must be an ExperimentResults object. Got {type(other)}'
+        
+        for k, v in other.get_all_results().items():
+            self.results[k].extend(v)
+            
+        for k, v in other.get_all_artifacts().items():
+            self.artifacts[k].extend(v)
+            
+        for k, v in other.records.items():
+            self.records[k].extend(v)
+
 class ExperimentBase:
     def __init__(self) -> None:
         self.model_type: str 
