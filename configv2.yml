@@ -101,8 +101,6 @@ model_hyperparameters:
     model_fixed_seed: 42
 
 beta_rob:
-  method: GS
-  beta_estim_method: 'MLE'
   k_mlps_in_B: 30
   growingSpheresHparams:
     max_iter: 100

@@ -1,6 +1,7 @@
 import time
 import numpy as np
 from sklearn.model_selection import train_test_split
+from sklearn.neighbors import NearestNeighbors
 import yaml
 import os
 import logging
@@ -8,7 +9,9 @@ import pandas as pd
 
 from create_data_examples import Dataset, DatasetPreprocessor
 from mlpclassifier import MLPClassifier, train_neural_network, train_K_mlps_in_parallel
+from explainers import DiceExplainer, GrowingSpheresExplainer, BaseExplainer
 from utils import bootstrap_data
+from betarob import BetaRob
 
 def get_config(path: str = './configv2.yml') -> dict:
     with open(path, 'r') as file:
@@ -101,8 +104,147 @@ def train_model_2(X_train, y_train, ex_type : str, model_type: str, hparams: dic
     
     return m, pp, pc
           
+def prepare_base_counterfactual_explainer(
+        base_cf_method: str,
+        hparams: dict,
+        model: MLPClassifier,
+        X_train: pd.DataFrame,
+        y_train: pd.Series | np.ndarray,
+        dataset_preprocessor: DatasetPreprocessor,
+        predict_fn_1_crisp: callable,  
+    ) -> BaseExplainer:
+    
+    
+    match base_cf_method:
+        case 'dice':
+            X_train_w_target = X_train.copy()
+            X_train_w_target[dataset_preprocessor.target_column] = y_train
+            explainer = DiceExplainer(
+                dataset=X_train_w_target,
+                model=model,
+                outcome_name=dataset_preprocessor.target_column,
+                continous_features=dataset_preprocessor.continuous_columns
+            )
+            explainer.prep(
+                dice_method='random',
+                feature_encoding=None
+            )
+        case 'gs':
+            _gsconfig = hparams['growingSpheresHparams']
+            
+            explainer = GrowingSpheresExplainer(
+                keys_mutable=dataset_preprocessor.X_train.columns.tolist(),
+                keys_immutable=[],
+                feature_order=dataset_preprocessor.X_train.columns.tolist(),
+                binary_cols=dataset_preprocessor.encoder.get_feature_names_out().tolist(),
+                continous_cols=dataset_preprocessor.continuous_columns,
+                pred_fn_crisp=predict_fn_1_crisp,
+                target_proba=_gsconfig['target_proba'],
+                max_iter=_gsconfig['max_iter'],
+                n_search_samples=_gsconfig['n_search_samples'],
+                p_norm=_gsconfig['p_norm'],
+                step=_gsconfig['step']
+            )    
+            explainer.prep()
+        case _:
+            raise ValueError('base_cf_method must be either "dice" or "gs"')
+        
+    return explainer
+
+def base_counterfactual_generate(
+    base_explainer: BaseExplainer,
+    instance: pd.DataFrame,
+    **kwargs,
+    ) -> np.ndarray:
+    
+    if isinstance(base_explainer, DiceExplainer):
+        return base_explainer.generate(instance, **kwargs)
+    elif isinstance(base_explainer, GrowingSpheresExplainer):
+        return base_explainer.generate(instance)
+    else:
+        raise ValueError('base_explainer must be either a DiceExplainer or a GrowingSpheresExplainer')
+
+def robust_counterfactual_generate(
+        start_instance: np.ndarray | pd.DataFrame,
+        target_class: int,
+        delta_target: float,
+        beta_confidence: float,
+        dataset: Dataset, 
+        preprocessor: DatasetPreprocessor, 
+        pred_fn_crisp: callable,
+        pred_fn_proba: callable,
+        estimators_crisp: list[callable],
+        grow_sphere_hparams: dict,
+        classification_threshold: float,
+        seed: int,
+    ) -> tuple[np.ndarray, dict]:
+    
+    beta_explainer = BetaRob(
+        dataset=dataset,
+        preprocessor=preprocessor,
+        pred_fn_crisp=pred_fn_crisp,
+        pred_fn_proba=pred_fn_proba,
+        estimators_crisp=estimators_crisp,
+        grow_sphere_hparams=grow_sphere_hparams,
+        classification_threshold=classification_threshold,
+        seed=seed
+    )
+    
+    robust_cf, artifact_dict = beta_explainer.generate(
+        start_instance=start_instance,
+        target_class=target_class,
+        delta_target=delta_target,
+        beta_confidence=beta_confidence
+    )
+    
+    return robust_cf, artifact_dict
+    
+def calculate_metrics(cf: np.ndarray, 
+        cf_desired_class: int,
+        x: np.ndarray, 
+        y_train: np.ndarray,
+        nearest_neighbors_model: NearestNeighbors,
+        predict_fn_crisp: callable,
+        dpow_neighbours: int = 15,
+        plausibility_neighbours: int = 15,
+    ) -> dict[str, float | int]:
+    '''
+    Calculates the metrics for a counterfactual example.
+    '''
+    
+    cf_label = predict_fn_crisp(cf)[0]
+    
+    # Validity
+    validity = int(int(cf_label) == cf_desired_class)
+    
+    # Proximity L1
+    proximityL1 = np.sum(np.abs(x - cf))
+    
+    # Proximity L2
+    proximityL2 = np.sqrt(np.sum(np.square(x - cf)))
+    
+    # Discriminative Power (fraction of neighbors with the same label as the counterfactual)
+    neigh_indices = nearest_neighbors_model.kneighbors(cf.reshape(1, -1), return_distance=False, n_neighbors=dpow_neighbours)
+    neigh_labels = y_train[neigh_indices[0]]
+    dpow = np.sum(neigh_labels == cf_label) / len(neigh_labels) # The fraction of neighbors with the same label as the counterfactual
+    
+    # Plausibility (average distance to the 50 nearest neighbors in the training data)
+    neigh_dist, _ = nearest_neighbors_model.kneighbors(cf.reshape(1, -1), return_distance=True, n_neighbors=plausibility_neighbours)
+    plausibility = np.mean(neigh_dist[0])
+    
+    return {
+        'validity': validity,
+        'proximityL1': proximityL1,
+        'proximityL2': proximityL2,
+        'dpow': dpow,
+        'plausibility': plausibility
+    }
+
+          
 def experiment(config: dict, 
         model_type_to_use: str = 'neural_network',
+        base_cf_method: str = 'gs',
+        robust_cf_method: str = 'betarob',
         save_every_n_iterations: int = 100,
     ):
     
@@ -127,12 +269,15 @@ def experiment(config: dict,
     
     # Extract the beta-robustness parameters
     k_mlps_in_B = BETA_ROB['k_mlps_in_B']
+    beta_gs_hparams = BETA_ROB['growingSpheresHparams']
     
     # Get the model hyperparameters
     model_fixed_seed = MODEL_HYPERPARAMETERS[model_type_to_use]['model_fixed_seed']
     model_fixed_hparams = MODEL_HYPERPARAMETERS[model_type_to_use]['model_fixed_hyperparameters']
     model_hyperparameters_pool = MODEL_HYPERPARAMETERS[model_type_to_use]['model_hyperparameters_pool']
     model_base_hyperparameters = MODEL_HYPERPARAMETERS[model_type_to_use]['model_base_hyperparameters']
+    
+    classification_threshold = model_base_hyperparameters['classification_threshold']
     
     
     metrics = [
@@ -197,10 +342,10 @@ def experiment(config: dict,
                 )
             
                 # Unpack the dataset with train test from a given fold
-                X_train, X_test, y_train, y_test = dataset_preprocessor.get_data()
+                X_train_pd, X_test_pd, y_train, y_test = dataset_preprocessor.get_data()
                 
                 # Convert to numpy
-                X_train, X_test = [x.to_numpy() for x in (X_train, X_test)]
+                X_train, X_test = [x.to_numpy() for x in (X_train_pd, X_test_pd)]
                 
                 # Train M_1
                 hparamsM1 = model_base_hyperparameters | model_fixed_hparams
@@ -226,7 +371,23 @@ def experiment(config: dict,
                     y_test=y_test
                 )
                 time_modelsB = time.time() - t0
-                logging.info(f"Finished training B")
+                modelsB_crisp_fns = [lambda x: model.predict_crisp(x, classification_threshold) for model in modelsB]
+                logging.info(f"Finished training B in {time_modelsB} seconds")
+                
+                # Prepare Base Counterfactual Explainer
+                base_explainer = prepare_base_counterfactual_explainer(
+                    base_cf_method=base_cf_method,
+                    hparams=hparamsM1,
+                    model=model1,
+                    X_train=X_train_pd,
+                    y_train=y_train,
+                    dataset_preprocessor=dataset_preprocessor,
+                    predict_fn_1_crisp=pred_crisp1
+                )
+                
+                # Prepare the nearest neighbors model for the metrics
+                nearest_neighbors_model = NearestNeighbors(n_neighbors=20, n_jobs=1)
+                nearest_neighbors_model.fit(X_train)
                     
                 
                 for ex_generalization in ex_types:
@@ -267,14 +428,30 @@ def experiment(config: dict,
                         # Obtain the test sample
                         x_test_sample = X_test[x]
                         y_test_sample = y_test[x]
+                        x_test_sample_pd = pd.DataFrame(x_test_sample.reshape(1, -1), columns=X_test_pd.columns)
                         
                         # Obtain the predictions from M_1
                         pred_proba1_sample = pred_proba1(x_test_sample)
                         pred_crisp1_sample = pred_crisp1(x_test_sample)
                         
-                        # Obtain the base counterfactual
+                        # If the prediction is 0, then the target class is 1, and vice versa
+                        taget_class = 1 - pred_crisp1_sample
                         
+                        # Obtain the base counterfactual
+                        base_cf = base_counterfactual_generate(
+                            base_explainer=base_explainer,
+                            instance=x_test_sample_pd,
+                        )
+                            
                         # Calculate metrics
+                        base_metrics_model1 = calculate_metrics(
+                            cf=base_cf,
+                            cf_desired_class=taget_class,
+                            x=x_test_sample,
+                            y_train=y_train,
+                            nearest_neighbors_model=nearest_neighbors_model,
+                            predict_fn_crisp=pred_crisp1,
+                        )
                         
                         # Store in the frame
                         
@@ -282,15 +459,49 @@ def experiment(config: dict,
                             for delta_robustness in delta_robustnesses:
                                 for model2_name, model2, pred_proba2, pred_crisp2 in model2_handles:
                                     
+                                    # Start from calculating the validity of the base counterfactual           
+                                    base_cf_validity_model2 = int(int(pred_crisp2(base_cf)) == taget_class)
+                                    # TODO: intelligent insert into results_df
+                                    
                                     # Obtain the predictions from M_2
                                     pred_proba2_sample = pred_proba2(x_test_sample)
                                     pred_crisp2_sample = pred_crisp2(x_test_sample)
                                     
                                     # Obtain the robust counterfactual
-                                    
+                                    match robust_cf_method:
+                                        case 'betarob':
+                                            robust_counterfactual, artifact_dict = robust_counterfactual_generate(
+                                                start_instance=x_test_sample,
+                                                target_class=taget_class,
+                                                delta_target=delta_robustness,
+                                                beta_confidence=beta_confidence,
+                                                dataset=dataset, 
+                                                preprocessor=dataset_preprocessor, 
+                                                pred_fn_crisp=pred_crisp1,
+                                                pred_fn_proba=pred_proba1,
+                                                estimators_crisp=modelsB_crisp_fns,
+                                                grow_sphere_hparams=beta_gs_hparams,
+                                                classification_threshold=classification_threshold,
+                                                seed=global_random_state
+                                            )
+                                        case _:
+                                            raise ValueError('Unknown robust counterfactual method')
+                                        
                                     # Calculate the metrics
+                                    robust_metrics_model1 = calculate_metrics(
+                                        cf=robust_counterfactual,
+                                        cf_desired_class=taget_class,
+                                        x=x_test_sample,
+                                        y_train=y_train,
+                                        nearest_neighbors_model=nearest_neighbors_model,
+                                        predict_fn_crisp=pred_crisp1,
+                                    )
+                                    robust_cf_validity_model2 = int(int(pred_crisp2(robust_counterfactual)) == taget_class)
+                                    robust_cf_L1_distance_from_base_cf = np.sum(np.abs(robust_counterfactual - base_cf))
+                                    robust_cf_L2_distance_from_base_cf = np.sum(np.square(robust_counterfactual - base_cf))
                                     
                                     # Store the results in the frame
+                                    
                                     
                                     
                                     global_iteration += 1
@@ -304,6 +515,9 @@ def experiment(config: dict,
                 results_df.to_parquet(f'./{results_dir}/final_results.parquet')
                 
                 exit(0)
+                
+                
+   
                 
 
 
