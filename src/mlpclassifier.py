@@ -328,7 +328,7 @@ def train_K_mlps(X_train,
         f1s.append(f1)
         models.append(mlp)
         
-    logging.debug(f'Average accuracy: {np.mean(accuracies)}, Average recall: {np.mean(recalls)}, Average precision: {np.mean(precisions)}, Average f1: {np.mean(f1s)}')
+    logging.info(f'Average accuracy: {np.mean(accuracies)}, Average recall: {np.mean(recalls)}, Average precision: {np.mean(precisions)}, Average f1: {np.mean(f1s)}')
     return {
         'models': models,
         'accuracies': accuracies,
