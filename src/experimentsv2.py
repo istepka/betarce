@@ -352,7 +352,7 @@ def experiment(config: dict,
                 t0 = time.time()
                 model1, pred_proba1, pred_crisp1 = train_model(X_train, y_train, model_type_to_use, model_fixed_seed, hparamsM1)
                 time_model1 = time.time() - t0
-                logging.info(f"Finished training M_1")
+                logging.info(f"Finished training M_1 in {time_model1} seconds")
                 
                 # Train B
                 t0 = time.time()
@@ -438,10 +438,12 @@ def experiment(config: dict,
                         taget_class = 1 - pred_crisp1_sample
                         
                         # Obtain the base counterfactual
+                        t0 = time.time()
                         base_cf = base_counterfactual_generate(
                             base_explainer=base_explainer,
                             instance=x_test_sample_pd,
                         )
+                        time_base_cf = time.time() - t0
                             
                         # Calculate metrics
                         base_metrics_model1 = calculate_metrics(
@@ -468,6 +470,7 @@ def experiment(config: dict,
                                     pred_crisp2_sample = pred_crisp2(x_test_sample)
                                     
                                     # Obtain the robust counterfactual
+                                    t0 = time.time()
                                     match robust_cf_method:
                                         case 'betarob':
                                             robust_counterfactual, artifact_dict = robust_counterfactual_generate(
@@ -486,6 +489,7 @@ def experiment(config: dict,
                                             )
                                         case _:
                                             raise ValueError('Unknown robust counterfactual method')
+                                    time_robust_cf = time.time() - t0
                                         
                                     # Calculate the metrics
                                     robust_metrics_model1 = calculate_metrics(
@@ -501,7 +505,7 @@ def experiment(config: dict,
                                     robust_cf_L2_distance_from_base_cf = np.sum(np.square(robust_counterfactual - base_cf))
                                     
                                     # Store the results in the frame
-                                    
+
                                     
                                     
                                     global_iteration += 1
