@@ -19,7 +19,6 @@ import joblib
 
 from create_data_examples import DatasetPreprocessor, Dataset
 from scikit_models import load_model, scikit_predict_proba_fn, train_model, save_model, train_calibrated_model, scikit_predict_crisp_fn
-from dice_wrapper import get_dice_explainer, get_dice_counterfactuals
 from robx import robx_algorithm, counterfactual_stability
 from config_wrapper import ConfigWrapper
 from explainers import BaseExplainer, DiceExplainer, GrowingSpheresExplainer
@@ -358,9 +357,29 @@ class ExperimentBase:
         y_test = self.y_test1
         model = self.model1
         
-        # Prepare the results object, with the expected size, which will speed up the process
-        self.results = ExperimentResults(expected_size = stop_after if stop_after else len(X_test))
         
+        self.results: dict = dict()
+        
+        # Get parameters for the robust counterfactual generation from the config
+        match robust_method:
+            case 'statrob':
+                bernouli_thresholds_to_examine = self.config.get_config_by_key('statrobHparams')['bernouli_thresholds_to_examine']
+                desired_beta_confidence = self.config.get_config_by_key('statrobHparams')['desired_beta_confidence']
+                
+                for b in bernouli_thresholds_to_examine:
+                    self.results[b] = ExperimentResults()
+            case 'robx':
+                tau_thresholds_to_examine = self.config.get_config_by_key('robXHparams')['tau_thresholds_to_examine']
+                variances_to_examine = self.config.get_config_by_key('robXHparams')['variances_to_examine']
+                
+                for t in tau_thresholds_to_examine:
+                    for v in variances_to_examine:
+                        self.results[(t, v)] = ExperimentResults()
+            case _:
+                raise ValueError('robust_method must be either "robx" or "statrob"')
+        
+        n_configurations = len(self.results)
+        print(f'Running experiment with {n_configurations} configurations')
         
         self.lof_model.fit(self.X_train1.to_numpy())
         self.lof_model2.fit(self.X_train2.to_numpy())
@@ -444,18 +463,7 @@ class ExperimentBase:
                     blackbox=model,
                     seed=self.config.get_config_by_key('random_state'),
                 )
-                
                 statrobExplainer.fit(k_mlps=self.config.get_config_by_key('statrobHparams')['k_mlps'])
-            case 'statrobxplus':
-                statrobxplusExplainer = StatRobXPlus(
-                    dataset=X_train.to_numpy(),
-                    preprocessor=self.preprocessor,
-                    blackbox=model,
-                    seed=self.config.get_config_by_key('random_state'),
-                )
-                
-                statrobxplusExplainer.fit(k_mlps=self.config.get_config_by_key('statrobHparams')['k_mlps'])        
-            
             case _:
                 raise ValueError('robust_method must be either "robx" or "statrob"')
             
@@ -475,7 +483,6 @@ class ExperimentBase:
                             desired_class= 1 - orig_y,
                             classification_threshold=self.class_threshold,
                         )
-                        print('DICE')
                     case 'wachter':
                         base_cf = explainer.generate(
                             query_instance=orig_x,
@@ -524,106 +531,118 @@ class ExperimentBase:
                     predict_fn = self.predict_fn_2,
                     robXHparams = self.robXHparams
                 )    
+               
+            # Add to all results
+            
+            for rk in self.results.keys():
                 
-            for k, v in metrics.items():
-                self.results.add_metric(k, v)
-            for k, v in metrics_2.items():
-                self.results.add_metric(f'{k}_2', v)
+                for k, v in metrics.items():
+                    self.results[rk].add_metric(k, v)
+                for k, v in metrics_2.items():
+                    self.results[rk].add_metric(f'{k}_2', v)
+                    
+                self.results[rk].add_metric('generation_time', generation_time)
                 
-            self.results.add_metric('generation_time', generation_time)
-                
-            # FIND ROBUST COUNTERFACTUAL    
-            start_time = time.time()
-            try:
-                match robust_method:
-                    case 'robx':
+            # FIND ROBUST COUNTERFACTUAL for each configuration
+            for rk in self.results.keys():
+                if robust_method == 'robx':
+                    tau = rk[0]
+                    variance = rk[1]
+                    start_time = time.time()
+                    try:
                         robust_cf, _ = robx_algorithm(
                             X_train = X_train.to_numpy(),
                             predict_class_proba_fn = self.predict_fn_1,
                             start_counterfactual = cf_numpy,
-                            tau = self.robXHparams['tau'],
-                            variance = self.robXHparams['variance'],
+                            tau = tau,
+                            variance = variance,
                             N = self.robXHparams['N'],
                         )
-                    case 'statrob':
+                    except Exception as e:
+                        robust_cf = None
+                        print(f'Error generating robust counterfactual: {e}')
+                        
+                    rob_generation_time = time.time() - start_time
+                elif robust_method == 'statrob':
+                    thresh = rk
+                    desired_beta_confidence = self.config.get_config_by_key('statrobHparams')['desired_beta_confidence']
+                    start_time = time.time()
+                    try:
                         robust_cf, artifacts_dict = statrobExplainer.optimize(
                             start_sample=cf_numpy.reshape(1, -1),
                             target_class=1 - orig_y,
                             method=self.config.get_config_by_key('statrobHparams')['method'],
-                            desired_confidence=self.config.get_config_by_key('statrobHparams')['beta_confidence'],
+                            desired_confidence=self.config.get_config_by_key('statrobHparams')['beta_confidence'], #TODO: Change to desired_beta_confidence and add thresh
                             opt_hparams=self.config.get_config_by_key('statrobHparams')['growingSpheresHparams']
                         )
-                        self.results.add_record('artifacts', artifacts_dict)
-                    case 'statrobxplus':
-                        robust_cf = statrobxplusExplainer.optimize(
-                            start_sample=cf_numpy.reshape(1, -1),
-                            target_class=1 - orig_y,
-                            desired_confidence=self.config.get_config_by_key('statrobHparams')['beta_confidence'],
-                        )
-            except Exception as e:
-                robust_cf = None
-                print(f'Error generating robust counterfactual: {e}')
-            rob_generation_time = time.time() - start_time # Get the generation time in seconds
-            
-            if robust_cf is None:
-                rob_metrics = empty_metrics.copy()
-                rob_metrics_2 = empty_metrics.copy()
-            else:    
-                cf_desired_class = 1 - orig_y
+                        self.results[rk].add_record('artifacts', artifacts_dict)
+                    except Exception as e:
+                        robust_cf = None
+                        print(f'Error generating robust counterfactual: {e}')
+                    rob_generation_time = time.time() - start_time
+                else:
+                    raise ValueError('robust_method must be either "robx" or "statrob"')
                 
-                rob_metrics = self.calculate_metrics(
-                    cf = robust_cf.flatten(),
-                    cf_desired_class=cf_desired_class,
-                    x = x_numpy,
-                    X_train=X_train.to_numpy(),
-                    y_train=y_train,
-                    lof_model = self.lof_model,
-                    nearest_neighbors_model=self.nearest_neighbors,
-                    predict_fn = self.predict_fn_1,
-                    robXHparams = self.robXHparams
-                )
             
-                rob_metrics_2 = self.calculate_metrics(
-                    cf = robust_cf.flatten(),
-                    cf_desired_class=cf_desired_class,
-                    x = x_numpy,
-                    X_train=self.X_train2.to_numpy(),
-                    y_train=self.y_train2,
-                    lof_model = self.lof_model2,
-                    nearest_neighbors_model=self.nearest_neighbors2,
-                    predict_fn = self.predict_fn_2,
-                    robXHparams = self.robXHparams
-                )
+                if robust_cf is None:
+                    rob_metrics = empty_metrics.copy()
+                    rob_metrics_2 = empty_metrics.copy()
+                else:    
+                    cf_desired_class = 1 - orig_y
+                    
+                    rob_metrics = self.calculate_metrics(
+                        cf = robust_cf.flatten(),
+                        cf_desired_class=cf_desired_class,
+                        x = x_numpy,
+                        X_train=X_train.to_numpy(),
+                        y_train=y_train,
+                        lof_model = self.lof_model,
+                        nearest_neighbors_model=self.nearest_neighbors,
+                        predict_fn = self.predict_fn_1,
+                        robXHparams = self.robXHparams
+                    )
                 
-            for k, v in rob_metrics.items():
-                self.results.add_metric(f'robust_{k}', v)
+                    rob_metrics_2 = self.calculate_metrics(
+                        cf = robust_cf.flatten(),
+                        cf_desired_class=cf_desired_class,
+                        x = x_numpy,
+                        X_train=self.X_train2.to_numpy(),
+                        y_train=self.y_train2,
+                        lof_model = self.lof_model2,
+                        nearest_neighbors_model=self.nearest_neighbors2,
+                        predict_fn = self.predict_fn_2,
+                        robXHparams = self.robXHparams
+                    )
+                    
+                for k, v in rob_metrics.items():
+                    self.results[rk].add_metric(f'robust_{k}', v)
+                    
+                for k, v in rob_metrics_2.items():
+                    self.results[rk].add_metric(f'robust_{k}_2', v)
                 
-            for k, v in rob_metrics_2.items():
-                self.results.add_metric(f'robust_{k}_2', v)
-            
-            self.results.add_metric('robust_generation_time', rob_generation_time)
-            
-            self.results.add_record('base_cf', base_cf)
-            self.results.add_record('robust_cf', robust_cf)
-            self.results.add_record('orig_x', orig_x)
-            self.results.add_record('orig_y', orig_y)
-            
-            # Calculate the L1&L2&CosineSim distance of the robust counterfactual to the base counterfactual
-            if robust_cf is not None and base_cf is not None:
-                self.results.add_metric('robust_cf_to_base_cf_proximity_L1', np.sum(np.abs(robust_cf - base_cf)))
-                self.results.add_metric('robust_cf_to_base_cf_proximity_L2', np.sqrt(np.sum(np.square(robust_cf - base_cf))))
-            else:
-                self.results.add_metric('robust_cf_to_base_cf_proximity_L1', np.nan)
-                self.results.add_metric('robust_cf_to_base_cf_proximity_L2', np.nan)
-            
+                self.results[rk].add_metric('robust_generation_time', rob_generation_time)
+                self.results[rk].add_record('base_cf', base_cf)
+                self.results[rk].add_record('robust_cf', robust_cf)
+                self.results[rk].add_record('orig_x', orig_x)
+                self.results[rk].add_record('orig_y', orig_y)
+                
+                # Calculate the L1&L2 distance of the robust counterfactual to the base counterfactual
+                if robust_cf is not None and base_cf is not None:
+                    self.results[rk].add_metric('robust_cf_to_base_cf_proximity_L1', np.sum(np.abs(robust_cf - base_cf)))
+                    self.results[rk].add_metric('robust_cf_to_base_cf_proximity_L2', np.sqrt(np.sum(np.square(robust_cf - base_cf))))
+                else:
+                    self.results[rk].add_metric('robust_cf_to_base_cf_proximity_L1', np.nan)
+                    self.results[rk].add_metric('robust_cf_to_base_cf_proximity_L2', np.nan)
+                
             if stop_after and j >= stop_after:
                 print(f'Stopping after {stop_after} iterations.')
                 break
-            
+                
             # Save the results to file after each iteration to avoid losing data
             if j % 30 == 0 or j == len(X_test) - 1 or j == stop_after - 1:
                 results_dir = self.config.get_config_by_key('result_path')
-                self.results.save_to_file(f'{results_dir}/{self.custom_experiment_name}.joblib')
+                for rk, r in self.results.items():
+                    r.save_to_file(f'{results_dir}/{self.custom_experiment_name}_{j}_{rk}.joblib')
             
         return True
     

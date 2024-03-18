@@ -1,6 +1,6 @@
 import numpy as np 
 from sklearn.datasets import make_moons, make_circles
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import StratifiedKFold, train_test_split, KFold
 from sklearn.neural_network import MLPClassifier
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -159,12 +159,14 @@ class DatasetPreprocessor:
     
     def __init__(self,
                 dataset: Dataset,
-                split: float = 0.8, 
+                split: float | None = 0.8, 
                 random_state: int = 0, 
                 stratify: bool = True, 
                 standardize_data: str = 'minmax',
                 one_hot: bool = False,
-                binarize_y: bool = True
+                binarize_y: bool = True,
+                cross_validation_folds: int | None = None,
+                fold_idx: int | None = None
                 ) -> None:
         '''
         Initialize the dataset preprocessor.
@@ -177,7 +179,10 @@ class DatasetPreprocessor:
             - standardize_data: whether to standardize the dataset (str) should be one of ['minmax', 'zscore']
             - one_hot: whether to one-hot encode the dataset (bool)
             - binarize_y: whether to binarize the target variable (bool)
+            - cross_validation_folds: the number of cross-validation folds (int)
+            - fold_idx: the index of the fold (int)
         '''
+        assert fold_idx is not None and cross_validation_folds is not None or fold_idx is None and cross_validation_folds is None, 'fold_idx and cross_validation_folds should be both None or both not None'
         
         self.dataset = dataset
         self.split = split
@@ -186,6 +191,9 @@ class DatasetPreprocessor:
         self.standardize_data = standardize_data
         self.one_hot = one_hot
         self.binarize_y = binarize_y
+        self.cross_validation_folds = cross_validation_folds
+        self.fold_idx = fold_idx
+        self.perform_cv = cross_validation_folds is not None and fold_idx is not None
         
         if self.standardize_data not in ['minmax', 'zscore']:
             raise ValueError('standardize_data should be one of ["minmax", "zscore"]')
@@ -215,16 +223,30 @@ class DatasetPreprocessor:
         X = X.dropna(how='any', axis=0)
         y = y[X.index]
         
-        if self.stratify:
-            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=1 - self.split, random_state=self.random_state, stratify=y)
+        if self.perform_cv:
+            if self.stratify:
+                kfold = StratifiedKFold(n_splits=self.cross_validation_folds, random_state=self.random_state, shuffle=True)
+            else:
+                kfold = KFold(n_splits=self.cross_validation_folds, random_state=self.random_state, shuffle=True)
+                
+            fold_to_use = self.fold_idx
+            for i, (train_index, test_index) in enumerate(kfold.split(X, y)):
+                if i == fold_to_use:
+                    X_train, X_test = X.iloc[train_index], X.iloc[test_index]
+                    y_train, y_test = y.iloc[train_index], y.iloc[test_index]
+                    break
+            
         else:
-            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=1 - self.split, random_state=self.random_state)
+            if self.stratify:
+                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=1 - self.split, random_state=self.random_state, stratify=y)
+            else:
+                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=1 - self.split, random_state=self.random_state)
             
         # reset the index
-        X_train = X_train.reset_index(drop=True)
-        X_test = X_test.reset_index(drop=True)
-        y_train = y_train.reset_index(drop=True)
-        y_test = y_test.reset_index(drop=True)
+        # X_train = X_train.reset_index(drop=True)
+        # X_test = X_test.reset_index(drop=True)
+        # y_train = y_train.reset_index(drop=True)
+        # y_test = y_test.reset_index(drop=True)
             
         if self.standardize_data:
             X_train_s = self.standardize(X_train, self.continuous_columns, fit=True)
@@ -235,7 +257,6 @@ class DatasetPreprocessor:
             
             X_train = pd.concat([X_train, X_train_s], axis=1)
             X_test = pd.concat([X_test, X_test_s], axis=1)
-            
         if self.one_hot:
             X_train_o = self.one_hot_encode(X_train, self.categorical_columns, fit=True)
             X_test_o = self.one_hot_encode(X_test, self.categorical_columns, fit=False)
@@ -250,6 +271,7 @@ class DatasetPreprocessor:
             y_train = self.label_encoder.fit_transform(y_train)
             y_test = self.label_encoder.transform(y_test)
             
+       
         return [X_train, X_test, y_train, y_test]
      
     def one_hot_encode(self, X: pd.DataFrame, categorical_columns: list[str], fit: bool) -> pd.DataFrame:
@@ -293,6 +315,7 @@ class DatasetPreprocessor:
         if fit:
             self.scaler.fit(X[continuous_columns])
         X_scaled = pd.DataFrame(self.scaler.transform(X[continuous_columns]), columns=continuous_columns)
+        X_scaled.index = X.index
         return X_scaled
     
     def inverse_standardize(self, X: pd.DataFrame, continuous_columns: list[str]) -> pd.DataFrame:
