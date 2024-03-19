@@ -2,6 +2,7 @@ import time
 import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.neighbors import NearestNeighbors
+from tqdm import tqdm
 import yaml
 import os
 import logging
@@ -255,6 +256,13 @@ def experiment(config: dict,
     
     # Extract the results directory
     results_dir = GENERAL['result_path']
+    results_df_dir = os.path.join(results_dir, 'results')
+    miscellaneous_df_path = os.path.join(results_dir, 'miscellaneous', 'miscellaneous_df.feather')
+    
+    os.makedirs(results_dir, exist_ok=True)
+    os.makedirs(results_df_dir, exist_ok=True)
+    os.makedirs(os.path.join(os.path.dirname(miscellaneous_df_path)), exist_ok=True)
+    
     
     # Extract the general parameters
     cv_folds = EXPERIMENTS_SETUP['cross_validation_folds']
@@ -280,47 +288,13 @@ def experiment(config: dict,
     classification_threshold = model_base_hyperparameters['classification_threshold']
     
     
-    metrics = [
-        "validity", 
-        "proximityL1", 
-        "proximityL2",
-        "plausibility", 
-        "discriminative_power",
-    ]
-    
-    results_columns = [
-        'experiment_type',
-        'dataset_name',
-        'fold_i',
-        'experiment_generalization_type',
-        'x_test_sample',
-        'y_test_sample',
-        'model1_pred_proba',
-        'model1_pred_crisp',
-        'model2_name',
-        'model2_pred_proba',
-        'model2_pred_crisp',
-        'base_counterfactual',
-        'base_counterfactual_model1_pred_proba',
-        'base_counterfactual_model1_pred_crisp',
-        'base_counterfactual_model2_pred_proba',
-        'base_counterfactual_model2_pred_crisp',
-        'robust_counterfactual',
-        'robust_counterfactual_model1_pred_proba',
-        'robust_counterfactual_model1_pred_crisp',
-        'robust_counterfactual_model2_pred_proba',
-        'robust_counterfactual_model2_pred_crisp',
-        'beta_confidence',
-        'delta_robustness',
-    ]
-    
-    for metric in metrics:
-        results_columns.append(f"base_counterfactual_{metric}")
-        results_columns.append(f"robust_counterfactual_{metric}")
-    
-    results_df = pd.DataFrame(columns=results_columns)
+  
+    results_df = pd.DataFrame()
+    miscellaneous_df = pd.DataFrame()
     
     global_iteration = 0
+    all_iterations = len(ex_types) * len(datasets) * cv_folds * m_count_per_experiment * len(ex_types) * x_test_size * len(beta_confidences) * len(delta_robustnesses)
+    tqdm_pbar = tqdm(total=all_iterations, desc="Overall progress")
     
     for ex_type in ex_types:
         logging.info(f"Running experiment type: {ex_type}")
@@ -373,6 +347,19 @@ def experiment(config: dict,
                 time_modelsB = time.time() - t0
                 modelsB_crisp_fns = [lambda x: model.predict_crisp(x, classification_threshold) for model in modelsB]
                 logging.info(f"Finished training B in {time_modelsB} seconds")
+                
+                # Add miscellaneous data to the frame
+                record = {
+                    'experiment_type': ex_type,
+                    'dataset_name': dataset_name,
+                    'fold_i': fold_i,
+                    'model1_time': time_model1,
+                    'modelsB_time': time_modelsB,
+                }
+                record = pd.DataFrame(record, index=[0])
+                miscellaneous_df = pd.concat([miscellaneous_df, record], ignore_index=True)
+                # Save the miscellaneous data
+                miscellaneous_df.to_feather(miscellaneous_df_path)
                 
                 # Prepare Base Counterfactual Explainer
                 base_explainer = prepare_base_counterfactual_explainer(
@@ -455,15 +442,49 @@ def experiment(config: dict,
                             predict_fn_crisp=pred_crisp1,
                         )
                         
-                        # Store in the frame
+                        # This flag is just so that we insert the base counterfactual data only once in the results_df
+                        first_flag = True
                         
                         for beta_confidence in beta_confidences:
                             for delta_robustness in delta_robustnesses:
                                 for model2_name, model2, pred_proba2, pred_crisp2 in model2_handles:
                                     
-                                    # Start from calculating the validity of the base counterfactual           
-                                    base_cf_validity_model2 = int(int(pred_crisp2(base_cf)) == taget_class)
-                                    # TODO: intelligent insert into results_df
+                                    # Start from calculating the validity of the base counterfactual  
+                                    # Do this only once as it is the same for all M_2 models and all beta_confidence and delta_robustness         
+                                    if first_flag:
+                                        base_cf_validity_model2 = int(int(pred_crisp2(base_cf)) == taget_class)
+                                        record = {
+                                            # Unique identifiers
+                                            'experiment_type': ex_type,
+                                            'dataset_name': dataset_name,
+                                            'fold_i': fold_i,
+                                            'experiment_generalization_type': ex_generalization,
+                                            'beta_confidence': beta_confidence,
+                                            'delta_robustness': delta_robustness,
+                                            'model2_name': model2_name,
+                                            # Utility data
+                                            'x_test_sample': x_test_sample,
+                                            'y_test_sample': y_test_sample,
+                                            'model1_pred_proba': pred_proba1_sample,
+                                            'model1_pred_crisp': pred_crisp1_sample,
+                                            'model2_pred_proba': pred_proba2(x_test_sample),
+                                            'model2_pred_crisp': pred_crisp2(x_test_sample),
+                                            # Base counterfactual data
+                                            'base_counterfactual': base_cf,
+                                            'base_counterfactual_model1_pred_proba': pred_proba1(base_cf),
+                                            'base_counterfactual_model1_pred_crisp': pred_crisp1(base_cf),
+                                            'base_counterfactual_model2_pred_proba': pred_proba2(base_cf),
+                                            'base_counterfactual_model2_pred_crisp': pred_crisp2(base_cf),
+                                            'base_counterfactual_validity': base_metrics_model1['validity'],
+                                            'base_counterfactual_proximityL1': base_metrics_model1['proximityL1'],
+                                            'base_counterfactual_proximityL2': base_metrics_model1['proximityL2'],
+                                            'base_counterfactual_plausibility': base_metrics_model1['plausibility'],
+                                            'base_counterfactual_discriminative_power': base_metrics_model1['dpow'],
+                                            'base_counterfactual_validity_model2': base_cf_validity_model2,
+                                            'base_counterfactual_time': time_base_cf,
+                                        }
+                                        record = pd.DataFrame(record, index=[0])
+                                        results_df = pd.concat([results_df, record], ignore_index=True)
                                     
                                     # Obtain the predictions from M_2
                                     pred_proba2_sample = pred_proba2(x_test_sample)
@@ -505,21 +526,64 @@ def experiment(config: dict,
                                     robust_cf_L2_distance_from_base_cf = np.sum(np.square(robust_counterfactual - base_cf))
                                     
                                     # Store the results in the frame
-
-                                    
-                                    
-                                    global_iteration += 1
+                                    record = {
+                                        # Unique identifiers
+                                        'experiment_type': ex_type,
+                                        'dataset_name': dataset_name,
+                                        'fold_i': fold_i,
+                                        'experiment_generalization_type': ex_generalization,
+                                        'beta_confidence': beta_confidence,
+                                        'delta_robustness': delta_robustness,
+                                        'model2_name': model2_name,
+                                        # Utility data
+                                        'x_test_sample': x_test_sample,
+                                        'y_test_sample': y_test_sample,
+                                        'model1_pred_proba': pred_proba1_sample,
+                                        'model1_pred_crisp': pred_crisp1_sample,
+                                        'model2_pred_proba': pred_proba2_sample,
+                                        'model2_pred_crisp': pred_crisp2_sample,
+                                        # Robust counterfactual data
+                                        'robust_counterfactual': robust_counterfactual,
+                                        'robust_counterfactual_model1_pred_proba': pred_proba1(robust_counterfactual),
+                                        'robust_counterfactual_model1_pred_crisp': pred_crisp1(robust_counterfactual),
+                                        'robust_counterfactual_model2_pred_proba': pred_proba2(robust_counterfactual),
+                                        'robust_counterfactual_model2_pred_crisp': pred_crisp2(robust_counterfactual),
+                                        'robust_counterfactual_validity': robust_metrics_model1['validity'],
+                                        'robust_counterfactual_proximityL1': robust_metrics_model1['proximityL1'],
+                                        'robust_counterfactual_proximityL2': robust_metrics_model1['proximityL2'],
+                                        'robust_counterfactual_plausibility': robust_metrics_model1['plausibility'],
+                                        'robust_counterfactual_discriminative_power': robust_metrics_model1['dpow'],
+                                        'robust_counterfactual_validity_model2': robust_cf_validity_model2,
+                                        'robust_counterfactual_L1_distance_from_base_cf': robust_cf_L1_distance_from_base_cf,
+                                        'robust_counterfactual_L2_distance_from_base_cf': robust_cf_L2_distance_from_base_cf,
+                                        'robust_counterfactual_time': time_robust_cf,
+                                    }
+                                    # Add artifact_dict to the record
+                                    record = {**record, **artifact_dict}
+                                    record = pd.DataFrame(record, index=[0])
+                                    results_df = pd.concat([results_df, record], ignore_index=True)
+                        
+                                    # Save the results every n iterations            
                                     if global_iteration % save_every_n_iterations == 0:
                                         results_df.to_feather(f'./{results_dir}/{global_iteration}_results.feather')
-                                    pass
-                        
-                        
-                results_df.to_feather(f'./{results_dir}/final_results.feather')
-                results_df.to_csv(f'./{results_dir}/final_results.csv')
-                results_df.to_parquet(f'./{results_dir}/final_results.parquet')
-                
-                exit(0)
-                
+                                        
+                                        # Clear the results_df to save memory and speed up the process
+                                        results_df = pd.DataFrame(columns=results_df.columns)
+                                        
+                                    global_iteration += 1
+                                    tqdm_pbar.update(1)
+                                    
+                                first_flag = False
+    
+    # Final save                       
+    results_df.to_feather(f'./{results_dir}/{global_iteration}_results.feather')
+    results_df = pd.DataFrame(columns=results_df.columns)
+    
+    # Progress bar close
+    tqdm_pbar.close()
+    
+    # Save the miscellaneous data
+    logging.info("Finished all experiments")
                 
    
                 

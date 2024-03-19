@@ -231,6 +231,6 @@ class BetaRob(BaseExplainer):
         preds = []
         for estimator in self.estimators_crisp:
             preds.append(estimator(instance))
-        return np.array(preds, dtype=int)
+        return np.array(preds, dtype=int).flatten()
         
         

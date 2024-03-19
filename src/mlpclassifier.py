@@ -62,18 +62,18 @@ class MLPClassifier(nn.Module):
             x = layer(x)
         return x.flatten()
     
-    def predict_proba(self, x):
+    def predict_proba(self, x) -> np.ndarray[float]:
         x = array_to_tensor(x)
-        return self.forward(x).detach().numpy()
+        return self.forward(x).detach().numpy().flatten()
     
-    def predict_crisp(self, x, threshold=0.5):
+    def predict_crisp(self, x, threshold=0.5) -> np.ndarray[int]:
         x = array_to_tensor(x)
         pred = self.predict_proba(x)
         
         if isinstance(pred, np.ndarray):
             pred = array_to_tensor(pred)
             
-        return (pred > threshold).int().detach().numpy()
+        return (pred > threshold).int().detach().numpy().flatten()
     
     def fit(self, 
             X_train: Union[np.array, torch.Tensor],
@@ -371,13 +371,27 @@ def train_K_mlps_in_parallel(X_train, y_train, X_test, y_test,
 def ensemble_predict_proba(models: list[MLPClassifier], X: Union[np.ndarray, torch.Tensor]) -> np.ndarray[float]:
     '''
     models: list, list of trained models
-    X: np.array, data
+    X: np.array, data. Shape (1, n_features).
+    
+    Returns:
+    np.ndarray, the predicted probabilities of shape (n_models,)
     '''
+    assert len(models) > 0, 'No models to predict'
+    if len(X.shape) == 2:
+        assert X.shape[0] == 1, 'X should have shape (1, n_features)'
+    if len(X.shape) == 1:
+        X = X.reshape(1, -1)
+    
     predictions = []
     X_tensor = array_to_tensor(X)
     for model in models:
         predictions.append(model.predict_proba(X_tensor))
     predictions = np.array(predictions)
+    
+    # Flatten the array if necessary
+    if len(predictions.shape) == 2:
+        predictions = predictions.flatten()
+    
     return predictions
   
 def ensemble_predict_crisp(sample: np.ndarray, models: list[MLPClassifier], class_threshold: float = 0.5) -> np.ndarray[int]:
@@ -390,12 +404,21 @@ def ensemble_predict_crisp(sample: np.ndarray, models: list[MLPClassifier], clas
         - class_threshold: float, threshold for crisp classes
         
     Returns:
-        - np.ndarray, the crisp class
+        - np.ndarray, the crisp class predictions of shape (n_models,)
     '''
+    assert len(models) > 0, 'No models to predict'
+    if len(sample.shape) == 1:
+        sample = sample.reshape(1, -1)
+    if len(sample.shape) == 2:
+        assert sample.shape[0] == 1, 'X should have shape (1, n_features)'
 
     predictions = []
     for model in models:
         predictions.append(model.predict_crisp(sample, threshold=class_threshold))
     predictions = np.array(predictions)
+    
+    if len(predictions.shape) == 2:
+        predictions = predictions.flatten()
+    
     return predictions
 
