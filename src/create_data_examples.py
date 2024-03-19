@@ -257,15 +257,18 @@ class DatasetPreprocessor:
             
             X_train = pd.concat([X_train, X_train_s], axis=1)
             X_test = pd.concat([X_test, X_test_s], axis=1)
+            
         if self.one_hot:
             X_train_o = self.one_hot_encode(X_train, self.categorical_columns, fit=True)
             X_test_o = self.one_hot_encode(X_test, self.categorical_columns, fit=False)
             
-            X_train = X_train.drop(columns=self.categorical_columns)
-            X_test = X_test.drop(columns=self.categorical_columns)
-            
-            X_train = pd.concat([X_train, X_train_o], axis=1)
-            X_test = pd.concat([X_test, X_test_o], axis=1)
+            # Concate only if there were categorical columns
+            if self.categorical_columns:
+                X_train = X_train.drop(columns=self.categorical_columns)
+                X_test = X_test.drop(columns=self.categorical_columns)
+                
+                X_train = pd.concat([X_train, X_train_o], axis=1)
+                X_test = pd.concat([X_test, X_test_o], axis=1)
             
         if self.binarize_y:
             y_train = self.label_encoder.fit_transform(y_train)
@@ -290,6 +293,7 @@ class DatasetPreprocessor:
         X_transformed = pd.DataFrame(X_transformed, columns=X_transformed_features)
         
         self.transformed_features = X_transformed_features
+        
         
         return X_transformed
     
