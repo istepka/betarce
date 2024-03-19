@@ -243,10 +243,7 @@ def calculate_metrics(cf: np.ndarray,
 
           
 def experiment(config: dict, 
-        model_type_to_use: str = 'neural_network',
-        base_cf_method: str = 'gs',
         robust_cf_method: str = 'betarob',
-        save_every_n_iterations: int = 100,
     ):
     
     GENERAL = config['general']
@@ -265,15 +262,19 @@ def experiment(config: dict,
     
     
     # Extract the general parameters
-    cv_folds = EXPERIMENTS_SETUP['cross_validation_folds']
     global_random_state = GENERAL['random_state']
     n_jobs = GENERAL['n_jobs']
-    m_count_per_experiment = GENERAL['m_count_per_experiment']
-    x_test_size = GENERAL['x_test_size']
+    save_every_n_iterations = GENERAL['save_every_n_iterations']
+    
+    cv_folds = EXPERIMENTS_SETUP['cross_validation_folds']
+    m_count_per_experiment = EXPERIMENTS_SETUP['m_count_per_experiment']
+    x_test_size = EXPERIMENTS_SETUP['x_test_size']
     ex_types = EXPERIMENTS_SETUP['ex_types']
     datasets = EXPERIMENTS_SETUP['datasets']
     beta_confidences = EXPERIMENTS_SETUP['beta_confidences']
     delta_robustnesses = EXPERIMENTS_SETUP['delta_robustnesses'] 
+    model_type_to_use = EXPERIMENTS_SETUP['model_type_to_use']
+    base_cf_method = EXPERIMENTS_SETUP['base_counterfactual_method']
     
     # Extract the beta-robustness parameters
     k_mlps_in_B = BETA_ROB['k_mlps_in_B']
