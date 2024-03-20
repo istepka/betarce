@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import scipy
+import logging
 from scipy import stats
 
 from explainers import BaseExplainer, GrowingSpheresExplainer
@@ -92,6 +93,7 @@ class BetaRob(BaseExplainer):
         '''
         Generate the counterfactual.
         '''
+        self.target_class = target_class
         
         # Modify all prediction functions to predict the "1" class
         if target_class == 0:
@@ -126,7 +128,7 @@ class BetaRob(BaseExplainer):
         )
         
         # Check if the start instance passes the goal function
-        if optimized_fn_crisp(start_instance)[0] == 1:
+        if optimized_fn_crisp(start_instance) == 1:
             artifact_dict['start_sample_passes_test'] = True
             artifact_dict['highest_delta'] = self.__get_left_bound_beta(start_instance, beta_confidence)
             return start_instance, artifact_dict
@@ -143,7 +145,7 @@ class BetaRob(BaseExplainer):
             return None, artifact_dict
         
         # Check if the counterfactual passes the goal function
-        if optimized_fn_crisp(robust_counterfactual)[0] == 1:
+        if optimized_fn_crisp(robust_counterfactual) == 1:
             artifact_dict['counterfactual_does_not_pass_test'] = True
             return None, artifact_dict
         
@@ -165,7 +167,9 @@ class BetaRob(BaseExplainer):
         Reuturns 1 if the instance satisfies the function, 0 otherwise.
         '''
         assert beta_confidence > 0 and beta_confidence < 1, 'Beta confidence must be in (0, 1)'
-        assert len(instance.shape) == 2, 'Instance must be 2D'
+        # assert len(instance.shape) == 2, 'Instance must be 2D'
+        if len(instance.shape) == 1:
+            instance = instance.reshape(1, -1)
         
         # Constraint #1: Validity in the original model
         
@@ -180,6 +184,7 @@ class BetaRob(BaseExplainer):
         
         # Constraint #2: Delta-robustness
         delta_results = np.zeros(instance.shape[0]).astype(bool)
+        lbs = np.zeros(instance.shape[0]) 
         
         for i in range(instance.shape[0]):
             delta_results[i] = self.__test_delta_robustness(
@@ -187,9 +192,19 @@ class BetaRob(BaseExplainer):
                 beta_confidence=beta_confidence,
                 delta_target=delta_target
             )
+            left_bound = self.__get_left_bound_beta(instance[i], beta_confidence)
+            lbs[i] = left_bound
             
-        final_results = model_preds & delta_results
-        return final_results.astype(int)
+        # AND the constraints
+        final_results: np.ndarray = model_preds & delta_results
+        
+        logging.debug(f'BetaRob funtion_to_optimize_results: {final_results.shape}: Any true?: {np.any(final_results)}: Target class: {self.target_class}: Model preds: {np.sum(model_preds)}, Delta results: {np.sum(delta_results)}, Left bounds: {[round(lb, 2) for lb in lbs]}')
+        
+        # Return final results as 0 or 1
+        if instance.shape[0] == 1:
+            return final_results.astype(int)[0]
+        else:
+            return final_results.astype(int)
     
     def __test_delta_robustness(self, instance: np.ndarray,
             beta_confidence: float, 

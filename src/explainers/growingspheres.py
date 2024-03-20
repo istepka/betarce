@@ -223,7 +223,8 @@ class GrowingSpheresExplainer(BaseExplainer):
         assert self.prep_done, 'You must prepare the explainer first'
         
         if isinstance(query_instance, np.ndarray):
-            query_instance = pd.DataFrame(query_instance, columns=self.feature_order)
+            qi = query_instance.reshape(1, -1) # reshape to 2D
+            query_instance = pd.DataFrame(qi, columns=self.feature_order)
             
         return growing_spheres_search(
             instance=query_instance,

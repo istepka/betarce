@@ -50,9 +50,9 @@ def train_B(ex_type: str,
         
     # Should seed vary?
     if 'seed' in ex_type.lower():
-        seedB = model_fixed_seed
-    else:
         seedB = None
+    else:
+        seedB = model_fixed_seed
         
     # Should architecture vary? 
     if 'architecture' in ex_type.lower():
@@ -75,7 +75,7 @@ def train_B(ex_type: str,
             K=k_mlps_in_B,
             n_jobs=n_jobs,
         )
-        models = [model for model, _, _, _, _ in results]
+        models = [model for partial_results in results for model in partial_results['models']]
     else:
         raise NotImplementedError("Random forest not implemented")
         
@@ -131,20 +131,19 @@ def prepare_base_counterfactual_explainer(
                 feature_encoding=None
             )
         case 'gs':
-            _gsconfig = hparams['growingSpheresHparams']
-            
+        
             explainer = GrowingSpheresExplainer(
                 keys_mutable=dataset_preprocessor.X_train.columns.tolist(),
                 keys_immutable=[],
                 feature_order=dataset_preprocessor.X_train.columns.tolist(),
-                binary_cols=dataset_preprocessor.encoder.get_feature_names_out().tolist(),
+                binary_cols=dataset_preprocessor.transformed_features.tolist(),
                 continous_cols=dataset_preprocessor.continuous_columns,
                 pred_fn_crisp=predict_fn_1_crisp,
-                target_proba=_gsconfig['target_proba'],
-                max_iter=_gsconfig['max_iter'],
-                n_search_samples=_gsconfig['n_search_samples'],
-                p_norm=_gsconfig['p_norm'],
-                step=_gsconfig['step']
+                target_proba=hparams['target_proba'],
+                max_iter=hparams['max_iter'],
+                n_search_samples=hparams['n_search_samples'],
+                p_norm=hparams['p_norm'],
+                step=hparams['step']
             )    
             explainer.prep()
         case _:
@@ -191,6 +190,8 @@ def robust_counterfactual_generate(
         seed=seed
     )
     
+    beta_explainer.prep()
+    
     robust_cf, artifact_dict = beta_explainer.generate(
         start_instance=start_instance,
         target_class=target_class,
@@ -212,6 +213,15 @@ def calculate_metrics(cf: np.ndarray,
     '''
     Calculates the metrics for a counterfactual example.
     '''
+    
+    if check_is_none(cf):
+        return {
+            'validity': np.nan,
+            'proximityL1': np.nan,
+            'proximityL2': np.nan,
+            'dpow': np.nan,
+            'plausibility': np.nan
+        }
     
     cf_label = predict_fn_crisp(cf)[0]
     
@@ -240,6 +250,29 @@ def calculate_metrics(cf: np.ndarray,
         'dpow': dpow,
         'plausibility': plausibility
     }
+
+def check_is_none(to_check: object) -> bool:
+    '''Check if the object is None or np.nan or has any NaN values.'''
+    if to_check is None or to_check is np.nan :
+        return True
+    
+    if isinstance(to_check, pd.Series) or isinstance(to_check, pd.DataFrame):
+        if to_check.isna().any().any():
+            return True
+        
+    if isinstance(to_check, np.ndarray):
+        if np.isnan(to_check).any():
+            return True
+        
+    if isinstance(to_check, list):
+        if pd.isna(to_check).any():
+            return True
+        if np.isnan(to_check).any():
+            return True
+        if pd.NA in to_check:
+            return True
+    
+    return False
 
           
 def experiment(config: dict, 
@@ -314,6 +347,7 @@ def experiment(config: dict,
                     cross_validation_folds=cv_folds,
                     fold_idx=fold_i,
                     random_state=global_random_state,
+                    one_hot=True,
                 )
             
                 # Unpack the dataset with train test from a given fold
@@ -348,7 +382,7 @@ def experiment(config: dict,
                 time_modelsB = time.time() - t0
                 modelsB_crisp_fns = [lambda x: model.predict_crisp(x, classification_threshold) for model in modelsB]
                 logging.info(f"Finished training B in {time_modelsB} seconds")
-                
+                                                
                 # Add miscellaneous data to the frame
                 record = {
                     'experiment_type': ex_type,
@@ -365,7 +399,7 @@ def experiment(config: dict,
                 # Prepare Base Counterfactual Explainer
                 base_explainer = prepare_base_counterfactual_explainer(
                     base_cf_method=base_cf_method,
-                    hparams=hparamsM1,
+                    hparams=beta_gs_hparams,
                     model=model1,
                     X_train=X_train_pd,
                     y_train=y_train,
@@ -398,6 +432,9 @@ def experiment(config: dict,
                             # If should not vary, then use the fixed hyperparameters
                             hparams2 = model_base_hyperparameters | model_fixed_hparams
                         
+                        if 'seed' in ex_type.lower(): # append the fixed seed also if needed
+                            hparams2['model_fixed_seed'] = model_fixed_seed
+                        
                         t0 = time.time() 
                         model2, pred_proba2, pred_crisp2 = train_model_2(X_train, y_train, ex_generalization, model_type_to_use, hparams2)
                         time_model2 = time.time() - t0
@@ -419,8 +456,8 @@ def experiment(config: dict,
                         x_test_sample_pd = pd.DataFrame(x_test_sample.reshape(1, -1), columns=X_test_pd.columns)
                         
                         # Obtain the predictions from M_1
-                        pred_proba1_sample = pred_proba1(x_test_sample)
-                        pred_crisp1_sample = pred_crisp1(x_test_sample)
+                        pred_proba1_sample = pred_proba1(x_test_sample)[0]
+                        pred_crisp1_sample = pred_crisp1(x_test_sample)[0]
                         
                         # If the prediction is 0, then the target class is 1, and vice versa
                         taget_class = 1 - pred_crisp1_sample
@@ -453,7 +490,18 @@ def experiment(config: dict,
                                     # Start from calculating the validity of the base counterfactual  
                                     # Do this only once as it is the same for all M_2 models and all beta_confidence and delta_robustness         
                                     if first_flag:
-                                        base_cf_validity_model2 = int(int(pred_crisp2(base_cf)) == taget_class)
+                                        if not check_is_none(base_cf):
+                                            base_cf_validity_model2 = int(int(pred_crisp2(base_cf)[0]) == taget_class)
+                                            base_counterfatual_model1_pred_proba = pred_proba1(base_cf)
+                                            base_counterfatual_model1_pred_crisp = pred_crisp1(base_cf)
+                                            base_counterfatual_model2_pred_proba = pred_proba2(base_cf)
+                                            base_counterfatual_model2_pred_crisp = pred_crisp2(base_cf)
+                                        else:
+                                            base_cf_validity_model2 = np.nan
+                                            base_counterfatual_model1_pred_proba = np.nan
+                                            base_counterfatual_model1_pred_crisp = np.nan
+                                            base_counterfatual_model2_pred_proba = np.nan
+                                            base_counterfatual_model2_pred_crisp = np.nan
                                         record = {
                                             # Unique identifiers
                                             'experiment_type': ex_type,
@@ -464,18 +512,18 @@ def experiment(config: dict,
                                             'delta_robustness': delta_robustness,
                                             'model2_name': model2_name,
                                             # Utility data
-                                            'x_test_sample': x_test_sample,
-                                            'y_test_sample': y_test_sample,
+                                            'x_test_sample': [x_test_sample],
+                                            'y_test_sample': [y_test_sample],
                                             'model1_pred_proba': pred_proba1_sample,
                                             'model1_pred_crisp': pred_crisp1_sample,
                                             'model2_pred_proba': pred_proba2(x_test_sample),
                                             'model2_pred_crisp': pred_crisp2(x_test_sample),
                                             # Base counterfactual data
-                                            'base_counterfactual': base_cf,
-                                            'base_counterfactual_model1_pred_proba': pred_proba1(base_cf),
-                                            'base_counterfactual_model1_pred_crisp': pred_crisp1(base_cf),
-                                            'base_counterfactual_model2_pred_proba': pred_proba2(base_cf),
-                                            'base_counterfactual_model2_pred_crisp': pred_crisp2(base_cf),
+                                            'base_counterfactual': [base_cf],
+                                            'base_counterfactual_model1_pred_proba': base_counterfatual_model1_pred_proba,
+                                            'base_counterfactual_model1_pred_crisp': base_counterfatual_model1_pred_crisp,
+                                            'base_counterfactual_model2_pred_proba': base_counterfatual_model2_pred_proba,
+                                            'base_counterfactual_model2_pred_crisp': base_counterfatual_model2_pred_crisp,
                                             'base_counterfactual_validity': base_metrics_model1['validity'],
                                             'base_counterfactual_proximityL1': base_metrics_model1['proximityL1'],
                                             'base_counterfactual_proximityL2': base_metrics_model1['proximityL2'],
@@ -488,30 +536,41 @@ def experiment(config: dict,
                                         results_df = pd.concat([results_df, record], ignore_index=True)
                                     
                                     # Obtain the predictions from M_2
-                                    pred_proba2_sample = pred_proba2(x_test_sample)
-                                    pred_crisp2_sample = pred_crisp2(x_test_sample)
+                                    pred_proba2_sample = pred_proba2(x_test_sample)[0]
+                                    pred_crisp2_sample = pred_crisp2(x_test_sample)[0]
                                     
                                     # Obtain the robust counterfactual
-                                    t0 = time.time()
-                                    match robust_cf_method:
-                                        case 'betarob':
-                                            robust_counterfactual, artifact_dict = robust_counterfactual_generate(
-                                                start_instance=x_test_sample,
-                                                target_class=taget_class,
-                                                delta_target=delta_robustness,
-                                                beta_confidence=beta_confidence,
-                                                dataset=dataset, 
-                                                preprocessor=dataset_preprocessor, 
-                                                pred_fn_crisp=pred_crisp1,
-                                                pred_fn_proba=pred_proba1,
-                                                estimators_crisp=modelsB_crisp_fns,
-                                                grow_sphere_hparams=beta_gs_hparams,
-                                                classification_threshold=classification_threshold,
-                                                seed=global_random_state
-                                            )
-                                        case _:
-                                            raise ValueError('Unknown robust counterfactual method')
-                                    time_robust_cf = time.time() - t0
+                                    if not check_is_none(base_cf):
+                                        t0 = time.time()
+                                        match robust_cf_method:
+                                            case 'betarob':
+                                                robust_counterfactual, artifact_dict = robust_counterfactual_generate(
+                                                    start_instance=base_cf,
+                                                    target_class=taget_class,
+                                                    delta_target=delta_robustness,
+                                                    beta_confidence=beta_confidence,
+                                                    dataset=dataset, 
+                                                    preprocessor=dataset_preprocessor, 
+                                                    pred_fn_crisp=pred_crisp1,
+                                                    pred_fn_proba=pred_proba1,
+                                                    estimators_crisp=modelsB_crisp_fns,
+                                                    grow_sphere_hparams=beta_gs_hparams,
+                                                    classification_threshold=classification_threshold,
+                                                    seed=global_random_state
+                                                )
+                                            case _:
+                                                raise ValueError('Unknown robust counterfactual method')
+                                        time_robust_cf = time.time() - t0
+                                    else:
+                                        robust_counterfactual = None
+                                        artifact_dict = {
+                                            'start_sample_passes_test': np.nan,
+                                            'counterfactual_does_not_pass_test': np.nan,
+                                            'counterfactual_does_not_have_target_class': np.nan,
+                                            'counterfactual_is_nan': np.nan,
+                                            'highest_delta': np.nan,
+                                        }
+                                        time_robust_cf = np.nan
                                         
                                     # Calculate the metrics
                                     robust_metrics_model1 = calculate_metrics(
@@ -522,9 +581,23 @@ def experiment(config: dict,
                                         nearest_neighbors_model=nearest_neighbors_model,
                                         predict_fn_crisp=pred_crisp1,
                                     )
-                                    robust_cf_validity_model2 = int(int(pred_crisp2(robust_counterfactual)) == taget_class)
-                                    robust_cf_L1_distance_from_base_cf = np.sum(np.abs(robust_counterfactual - base_cf))
-                                    robust_cf_L2_distance_from_base_cf = np.sum(np.square(robust_counterfactual - base_cf))
+                                    
+                                    if not check_is_none(robust_counterfactual):
+                                        robust_cf_validity_model2 = int(int(pred_crisp2(robust_counterfactual)[0]) == taget_class)
+                                        robust_cf_L1_distance_from_base_cf = np.sum(np.abs(robust_counterfactual - base_cf))
+                                        robust_cf_L2_distance_from_base_cf = np.sum(np.square(robust_counterfactual - base_cf))
+                                        robust_counterfactual_model1_pred_proba = pred_proba1(robust_counterfactual)
+                                        robust_counterfactual_model1_pred_crisp = pred_crisp1(robust_counterfactual)
+                                        robust_counterfactual_model2_pred_proba = pred_proba2(robust_counterfactual)
+                                        robust_counterfactual_model2_pred_crisp = pred_crisp2(robust_counterfactual)
+                                    else:
+                                        robust_cf_validity_model2 = np.nan
+                                        robust_cf_L1_distance_from_base_cf = np.nan
+                                        robust_cf_L2_distance_from_base_cf = np.nan
+                                        robust_counterfactual_model1_pred_proba = np.nan
+                                        robust_counterfactual_model1_pred_crisp = np.nan
+                                        robust_counterfactual_model2_pred_proba = np.nan
+                                        robust_counterfactual_model2_pred_crisp = np.nan
                                     
                                     # Store the results in the frame
                                     record = {
@@ -537,18 +610,18 @@ def experiment(config: dict,
                                         'delta_robustness': delta_robustness,
                                         'model2_name': model2_name,
                                         # Utility data
-                                        'x_test_sample': x_test_sample,
-                                        'y_test_sample': y_test_sample,
+                                        'x_test_sample': [x_test_sample],
+                                        'y_test_sample': [y_test_sample],
                                         'model1_pred_proba': pred_proba1_sample,
                                         'model1_pred_crisp': pred_crisp1_sample,
                                         'model2_pred_proba': pred_proba2_sample,
                                         'model2_pred_crisp': pred_crisp2_sample,
                                         # Robust counterfactual data
-                                        'robust_counterfactual': robust_counterfactual,
-                                        'robust_counterfactual_model1_pred_proba': pred_proba1(robust_counterfactual),
-                                        'robust_counterfactual_model1_pred_crisp': pred_crisp1(robust_counterfactual),
-                                        'robust_counterfactual_model2_pred_proba': pred_proba2(robust_counterfactual),
-                                        'robust_counterfactual_model2_pred_crisp': pred_crisp2(robust_counterfactual),
+                                        'robust_counterfactual': [robust_counterfactual],
+                                        'robust_counterfactual_model1_pred_proba': robust_counterfactual_model1_pred_proba,
+                                        'robust_counterfactual_model1_pred_crisp': robust_counterfactual_model1_pred_crisp,
+                                        'robust_counterfactual_model2_pred_proba': robust_counterfactual_model2_pred_proba,
+                                        'robust_counterfactual_model2_pred_crisp': robust_counterfactual_model2_pred_crisp,
                                         'robust_counterfactual_validity': robust_metrics_model1['validity'],
                                         'robust_counterfactual_proximityL1': robust_metrics_model1['proximityL1'],
                                         'robust_counterfactual_proximityL2': robust_metrics_model1['proximityL2'],

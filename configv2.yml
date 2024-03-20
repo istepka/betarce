@@ -11,13 +11,13 @@ general:
 
 experiments_setup:
   ex_types:
-    - "Bootstrap"
     - "Architecture"
-    - "Bootstrap-Architecture"
     - "Seed"
-    - "Seed-Bootstrap"
-    - "Seed-Architecture"
-    - "Seed-Bootstrap-Architecture"
+    - "Bootstrap"
+    - "Bootstrap-Architecture"
+    # - "Seed-Bootstrap"
+    # - "Seed-Architecture"
+    # - "Seed-Bootstrap-Architecture"
   datasets:
     - "fico"
     - "breast_cancer"
@@ -36,20 +36,16 @@ experiments_setup:
     - 0.95
     - 0.99
   x_test_size: 50
-  m_count_per_experiment: 50
-  cross_validation_folds: 3
-  base_counterfactual_method: 
-    - "gs"
-    # - "dice"
+  m_count_per_experiment: 5
+  cross_validation_folds: 5
+  base_counterfactual_method: "gs" # - "dice"
   metrics_to_calculate:
     - "validity"
     - "proximityL1"
     - "proximityL2"
     - "plausibility"
     - "dpow"
-  model_type_to_use: 
-    - "neural_network"
-    # - "random_forest"
+  model_type_to_use:  "neural_network" # - "random_forest"
   
 
 model_hyperparameters:
@@ -71,9 +67,9 @@ model_hyperparameters:
         - 256
       activation:
         - "relu"
+        - "tanh"
       optimizer:
         - "adam"
-        - "sgd"
     model_fixed_hyperparameters:
       hidden_layers: 3
       neurons_per_layer: 128
@@ -87,7 +83,7 @@ model_hyperparameters:
       epochs: 100
       batch_size: 128
       verbose: True
-      dropout: 0.2
+      dropout: 0.4
       classification_threshold: 0.5  
 
   random_forest:
@@ -115,10 +111,10 @@ model_hyperparameters:
     model_fixed_seed: 42
 
 beta_rob:
-  k_mlps_in_B: 30
+  k_mlps_in_B: 32
   growingSpheresHparams:
     max_iter: 100
     n_search_samples: 100
     p_norm: 2
-    step: 0.05
+    step: 0.1
     target_proba: 0.5

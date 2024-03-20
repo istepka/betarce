@@ -235,6 +235,7 @@ def train_K_mlps(X_train,
         fixed_hparams: bool,
         fixed_seed: int | None = None,
         bootstrap: bool = True,
+        bootstrap_seed: int | None = None,
         K: int = 5, 
     ) -> dict:
     '''
@@ -245,7 +246,9 @@ def train_K_mlps(X_train,
     hparams: dict, hyperparameters
     K: int, number of models to train
     bootstrap: bool, whether to use bootstrapping
+    bootstrap_seed: int | None, seed for bootstrapping
     '''
+    assert bootstrap_seed is not None or not bootstrap, 'If bootstrapping, a seed must be provided'
     
     # Set up the lists to store the results
     accuracies = []
@@ -272,15 +275,15 @@ def train_K_mlps(X_train,
         else:
             seed = np.random.randint(1, 100_000)
         
-        np.random.seed(seed)    
-        torch.manual_seed(seed)
         
         # Bootstrap the data
         if bootstrap:
+            np.random.seed(bootstrap_seed + k)    
             X_train, y_train = bootstrap_data(X_train, y_train)
-            
+
         # Sample hyperparameters
         if not fixed_hparams:
+            np.random.seed(bootstrap_seed + k) 
             hidden_layers = np.random.choice(hparams['hidden_layers'])
             activation = np.random.choice(hparams['activation'])
             neurons_per_layer = np.random.choice(hparams['neurons_per_layer'])
@@ -290,6 +293,10 @@ def train_K_mlps(X_train,
             activation = hparams['activation']
             neurons_per_layer = hparams['neurons_per_layer']
             optimizer = hparams['optimizer']
+            
+        
+        np.random.seed(seed)    
+        torch.manual_seed(seed) 
             
         mlp = MLPClassifier(input_dim=X_train.shape[1], 
                             hidden_layers=hidden_layers,
@@ -328,7 +335,8 @@ def train_K_mlps(X_train,
         f1s.append(f1)
         models.append(mlp)
         
-    logging.info(f'Ensemble: Average accuracy: {np.mean(accuracies)}, Average recall: {np.mean(recalls)}, Average precision: {np.mean(precisions)}, Average f1: {np.mean(f1s)}')
+    print(f'Ensemble: Average accuracy: {np.mean(accuracies)}, Average recall: {np.mean(recalls)}, Average precision: {np.mean(precisions)}, Average f1: {np.mean(f1s)}')
+    print(f'Ensemble: Std accuracy: {np.std(accuracies)}, Std recall: {np.std(recalls)}, Std precision: {np.std(precisions)}, Std f1: {np.std(f1s)}')
     return {
         'models': models,
         'accuracies': accuracies,
@@ -358,13 +366,16 @@ def train_K_mlps_in_parallel(X_train, y_train, X_test, y_test,
     '''
     
     k_for_each_job = K // n_jobs 
+    print(f'Bootstrapping: {bootstrap}, Fixed hyperparameters: {fixed_hparams}, Fixed seed: {fixed_seed}, K: {K}, n_jobs: {n_jobs}')
     
+    bootstrap_seed = 1234
     
     results = Parallel(n_jobs=n_jobs)(
         delayed(train_K_mlps)(X_train, y_train, X_test, y_test,
             K=k_for_each_job, bootstrap=bootstrap, hparams=hparams,
-            fixed_hparams=fixed_hparams, fixed_seed=fixed_seed
-        ) for _ in range(n_jobs)
+            fixed_hparams=fixed_hparams, fixed_seed=fixed_seed, 
+            bootstrap_seed=bootstrap_seed + i * k_for_each_job
+        ) for i in range(n_jobs)
     )
     return results
 
