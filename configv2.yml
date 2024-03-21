@@ -33,8 +33,6 @@ experiments_setup:
     - 0.7
     - 0.8
     - 0.9
-    - 0.95
-    - 0.99
   x_test_size: 50
   m_count_per_experiment: 5
   cross_validation_folds: 5
@@ -111,7 +109,10 @@ model_hyperparameters:
     model_fixed_seed: 42
 
 beta_rob:
-  k_mlps_in_B: 32
+  k_mlps_in_B: 
+    - 24
+    - 32
+    - 48
   growingSpheresHparams:
     max_iter: 100
     n_search_samples: 100

@@ -198,7 +198,7 @@ class BetaRob(BaseExplainer):
         # AND the constraints
         final_results: np.ndarray = model_preds & delta_results
         
-        logging.debug(f'BetaRob funtion_to_optimize_results: {final_results.shape}: Any true?: {np.any(final_results)}: Target class: {self.target_class}: Model preds: {np.sum(model_preds)}, Delta results: {np.sum(delta_results)}, Left bounds: {[round(lb, 2) for lb in lbs]}')
+        logging.debug(f'BetaRob funtion_to_optimize_results: {final_results.shape}: Any true?: {np.any(final_results)}: Beta: {beta_confidence}: Delta: {delta_target} Target class: {self.target_class}: Model preds: {np.sum(model_preds)}, Delta results: {np.sum(delta_results)}, Left bounds: {[round(lb, 2) for lb in lbs]}')
         
         # Return final results as 0 or 1
         if instance.shape[0] == 1:

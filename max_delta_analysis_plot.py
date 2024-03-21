@@ -38,4 +38,7 @@ plt.grid(axis='y')
 plt.title('Max achievable delta-Robustness for different alpha-confidence levels')
 plt.legend()
 plt.tight_layout()
+
+plt.savefig('images/betarob/max_delta_analysis.png', dpi=300, bbox_inches='tight')
+
 plt.show()
