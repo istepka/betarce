@@ -6,6 +6,7 @@ wandb/
 models/
 results/
 results*/
+old_results/
 
 images/random
 

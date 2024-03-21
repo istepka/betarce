@@ -447,12 +447,12 @@ def experiment(config: dict,
        
                     # Run the experiments for the generalization types
                     for ex_generalization in ex_types_for_generatilaztion:
+                        logging.info(f"Running experiment for generalization type: {ex_generalization}")
                         
                         model2_handles = []
                         model2_times = []
                         
                         for model_2_index in range(m_count_per_experiment):
-                            logging.info(f"Running experiment for generalization type: {ex_generalization}")
                             
                             # Train M_2
                             # Should architecture vary? 
@@ -707,8 +707,15 @@ def experiment(config: dict,
 
 if __name__ == "__main__":
     
-    logging.basicConfig(level=logging.DEBUG)
-    config = get_config()
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Run the experiments')
+    parser.add_argument('--config', type=str, default='./configv2.yml', help='The path to the config file')
+    
+    args = parser.parse_args()
+    
+    logging.basicConfig(level=logging.INFO)
+    config = get_config(args.config)
     logging.debug(config)
     
     experiment(config)
