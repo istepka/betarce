@@ -301,6 +301,10 @@ def experiment(config: dict,
     os.makedirs(results_df_dir, exist_ok=True)
     os.makedirs(miscellaneous_df_dir, exist_ok=True)
     
+    # Save the config right away
+    with open(os.path.join(results_dir, 'config.yml'), 'w') as file:
+        yaml.dump(config, file)
+    
     
     # Extract the general parameters
     global_random_state = GENERAL['random_state']
@@ -316,6 +320,7 @@ def experiment(config: dict,
     delta_robustnesses = EXPERIMENTS_SETUP['delta_robustnesses'] 
     model_type_to_use = EXPERIMENTS_SETUP['model_type_to_use']
     base_cf_method = EXPERIMENTS_SETUP['base_counterfactual_method']
+    perform_generalizations = EXPERIMENTS_SETUP['perform_generalizations']
     
     # Extract the beta-robustness parameters
     k_mlps_in_B_options = BETA_ROB['k_mlps_in_B']
@@ -333,7 +338,11 @@ def experiment(config: dict,
     miscellaneous_df = pd.DataFrame()
     
     global_iteration = 0
-    all_iterations = len(ex_types) * len(datasets) * cv_folds * m_count_per_experiment * len(ex_types) * x_test_size * len(beta_confidences) * len(delta_robustnesses)
+    all_iterations = len(ex_types) * len(datasets) * cv_folds * m_count_per_experiment  * x_test_size * len(beta_confidences) * len(delta_robustnesses)
+    
+    if perform_generalizations: # If generalizations are performed, then multiply the iterations by the number of generalizations
+        all_iterations *= len(ex_types)
+        
     tqdm_pbar = tqdm(total=all_iterations, desc="Overall progress")
     
     for ex_type in ex_types:
@@ -428,8 +437,16 @@ def experiment(config: dict,
                     # Prepare the nearest neighbors model for the metrics
                     nearest_neighbors_model = NearestNeighbors(n_neighbors=20, n_jobs=1)
                     nearest_neighbors_model.fit(X_train)
-                        
-                    for ex_generalization in ex_types:
+                    
+                    # If generalizations are not performed, then use the ex_type as the only generalization type 
+                    # -- which is not a generalization as it is the same as the experiment type
+                    if not perform_generalizations:
+                        ex_types_for_generatilaztion = [ex_type]
+                    else:
+                        ex_types_for_generatilaztion = ex_types
+       
+                    # Run the experiments for the generalization types
+                    for ex_generalization in ex_types_for_generatilaztion:
                         
                         model2_handles = []
                         model2_times = []
