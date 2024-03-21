@@ -145,7 +145,7 @@ class BetaRob(BaseExplainer):
             return None, artifact_dict
         
         # Check if the counterfactual has the target class
-        if self.__get_blackbox_pred_crisp(robust_counterfactual)[0] != target_class:
+        if self.__get_blackbox_pred_crisp(robust_counterfactual)[0] != 1:
             logging.warning(f'Counterfactual does not have the target class!: {robust_counterfactual}')
             artifact_dict['counterfactual_does_not_have_target_class'] = 1
             return None, artifact_dict
