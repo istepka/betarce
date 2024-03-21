@@ -1,3 +1,4 @@
+import time
 import numpy as np
 import pandas as pd
 import scipy
@@ -95,15 +96,6 @@ class BetaRob(BaseExplainer):
         '''
         self.target_class = target_class
         
-        # Modify all prediction functions to predict the "1" class
-        if target_class == 0:
-            self.pred_fn_crisp = lambda instance: 1 - self.pred_fn_crisp(instance)
-            self.pred_fn_proba = lambda instance: 1 - self.pred_fn_proba(instance)
-            estimators_new = []
-            for estimator in self.estimators_crisp:
-                estimators_new.append(lambda instance: 1 - estimator(instance))
-            self.estimators_crisp = estimators_new
-        
         # Prepare the artifact dictionary to store the results for analytics 
         artifact_dict = {
             'start_sample_passes_test': False,
@@ -150,7 +142,7 @@ class BetaRob(BaseExplainer):
             return None, artifact_dict
         
         # Check if the counterfactual has the target class
-        if self.pred_fn_crisp(robust_counterfactual)[0] != target_class:
+        if self.__get_blackbox_pred_crisp(robust_counterfactual)[0] != target_class:
             artifact_dict['counterfactual_does_not_have_target_class'] = True
             return None, artifact_dict
         
@@ -174,7 +166,7 @@ class BetaRob(BaseExplainer):
         # Constraint #1: Validity in the original model
         
         # First check if the instance has the target class
-        model_preds: np.ndarray = self.pred_fn_crisp(instance)
+        model_preds: np.ndarray = self.__get_blackbox_pred_crisp(instance)
         if np.all(model_preds != 1):
             if instance.shape[0] == 1:
                 return 0
@@ -246,6 +238,27 @@ class BetaRob(BaseExplainer):
         preds = []
         for estimator in self.estimators_crisp:
             preds.append(estimator(instance))
-        return np.array(preds, dtype=int).flatten()
+        preds_all = np.array(preds, dtype=int).flatten()
         
+        if self.target_class == 0:
+            preds_all = 1 - preds_all
+ 
+        return preds_all
+    
+    def __get_blackbox_pred_crisp(self, instance: np.ndarray) -> np.ndarray[int]:
+        '''
+        Get the crisp prediction of the blackbox model.
+        '''
+        if self.target_class == 0:
+            return 1 - self.pred_fn_crisp(instance)
+        else:
+            return self.pred_fn_crisp(instance)
         
+    def __get_blackbox_pred_proba(self, instance: np.ndarray) -> np.ndarray[float]:
+        '''
+        Get the probabilistic prediction of the blackbox model.
+        '''
+        if self.target_class == 0:
+            return 1 - self.pred_fn_proba(instance)
+        else:
+            return self.pred_fn_proba(instance)

@@ -179,6 +179,9 @@ def robust_counterfactual_generate(
         seed: int,
     ) -> tuple[np.ndarray, dict]:
     
+    preds_all = [model(start_instance) for model in estimators_crisp]
+    preds_all = np.array(preds_all).flatten()
+    
     beta_explainer = BetaRob(
         dataset=dataset,
         preprocessor=preprocessor,
@@ -380,7 +383,8 @@ def experiment(config: dict,
                         y_test=y_test
                     )
                     time_modelsB = time.time() - t0
-                    modelsB_crisp_fns = [lambda x: model.predict_crisp(x, classification_threshold) for model in modelsB]
+                    # modelsB_crisp_fns = [lambda x: model.predict_crisp(x, classification_threshold) for model in modelsB]
+                    modelsB_crisp_fns = [model.predict_crisp for model in modelsB]
                     logging.info(f"Finished training B in {time_modelsB} seconds")
                                                     
                     # Add miscellaneous data to the frame
@@ -412,7 +416,6 @@ def experiment(config: dict,
                     nearest_neighbors_model = NearestNeighbors(n_neighbors=20, n_jobs=1)
                     nearest_neighbors_model.fit(X_train)
                         
-                    
                     for ex_generalization in ex_types:
                         
                         model2_handles = []

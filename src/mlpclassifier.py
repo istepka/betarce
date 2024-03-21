@@ -284,6 +284,7 @@ def train_K_mlps(X_train,
         # Sample hyperparameters
         if not fixed_hparams:
             np.random.seed(bootstrap_seed + k) 
+            print(bootstrap_seed + k)
             hidden_layers = np.random.choice(hparams['hidden_layers'])
             activation = np.random.choice(hparams['activation'])
             neurons_per_layer = np.random.choice(hparams['neurons_per_layer'])
