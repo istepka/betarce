@@ -3,6 +3,7 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.neighbors import NearestNeighbors
 from tqdm import tqdm
+from scipy import stats
 import yaml
 import os
 import logging
@@ -179,9 +180,6 @@ def robust_counterfactual_generate(
         seed: int,
     ) -> tuple[np.ndarray, dict]:
     
-    preds_all = [model(start_instance) for model in estimators_crisp]
-    preds_all = np.array(preds_all).flatten()
-    
     beta_explainer = BetaRob(
         dataset=dataset,
         preprocessor=preprocessor,
@@ -277,6 +275,13 @@ def check_is_none(to_check: object) -> bool:
     
     return False
 
+def is_robustness_achievable_for_params(k: int, beta_confidence: float, delta_robustness: float) -> bool:
+    '''
+    Check if with the given parameters the robustness is achievable.
+    '''
+    lb, _ = stats.beta.interval(beta_confidence, 1 + k, 1)
+    return lb > delta_robustness
+    
           
 def experiment(config: dict, 
         robust_cf_method: str = 'betarob',
@@ -290,11 +295,11 @@ def experiment(config: dict,
     # Extract the results directory
     results_dir = GENERAL['result_path']
     results_df_dir = os.path.join(results_dir, 'results')
-    miscellaneous_df_path = os.path.join(results_dir, 'miscellaneous', 'miscellaneous_df.feather')
+    miscellaneous_df_dir = os.path.join(results_dir, 'miscellaneous')
     
     os.makedirs(results_dir, exist_ok=True)
     os.makedirs(results_df_dir, exist_ok=True)
-    os.makedirs(os.path.join(os.path.dirname(miscellaneous_df_path)), exist_ok=True)
+    os.makedirs(miscellaneous_df_dir, exist_ok=True)
     
     
     # Extract the general parameters
@@ -398,8 +403,16 @@ def experiment(config: dict,
                     }
                     record = pd.DataFrame(record, index=[0])
                     miscellaneous_df = pd.concat([miscellaneous_df, record], ignore_index=True)
+                    
                     # Save the miscellaneous data
-                    miscellaneous_df.to_feather(miscellaneous_df_path)
+                    if len(miscellaneous_df) >= save_every_n_iterations:
+                        path = os.path.join(miscellaneous_df_dir, f'miscellaneous_df_{global_iteration}.feather')
+                        miscellaneous_df.to_feather(path)
+                        
+                        # Preserve memory
+                        cols = miscellaneous_df.columns
+                        del miscellaneous_df
+                        miscellaneous_df = pd.DataFrame(cols=cols)
                     
                     # Prepare Base Counterfactual Explainer
                     base_explainer = prepare_base_counterfactual_explainer(
@@ -491,6 +504,7 @@ def experiment(config: dict,
                                 for delta_robustness in delta_robustnesses:
                                     for model2_name, model2, pred_proba2, pred_crisp2 in model2_handles:
                                         
+                                        
                                         # Start from calculating the validity of the base counterfactual  
                                         # Do this only once as it is the same for all M_2 models and all beta_confidence and delta_robustness         
                                         if first_flag:
@@ -545,7 +559,10 @@ def experiment(config: dict,
                                         pred_crisp2_sample = pred_crisp2(x_test_sample)[0]
                                         
                                         # Obtain the robust counterfactual
-                                        if not check_is_none(base_cf):
+                                        # Check if the robustness is achievable and if the base counterfactual is not None
+                                        achievable = is_robustness_achievable_for_params(k_mlps_in_B, beta_confidence, delta_robustness)
+                                        isNone = check_is_none(base_cf)
+                                        if achievable and not isNone:
                                             t0 = time.time()
                                             match robust_cf_method:
                                                 case 'betarob':
@@ -644,11 +661,13 @@ def experiment(config: dict,
                                         results_df = pd.concat([results_df, record], ignore_index=True)
                             
                                         # Save the results every n iterations            
-                                        if global_iteration % save_every_n_iterations == 0:
-                                            results_df.to_feather(f'./{results_dir}/{global_iteration}_results.feather')
+                                        if global_iteration % save_every_n_iterations == 0 and global_iteration > 0:
+                                            results_df.to_feather(f'./{results_df_dir}/{global_iteration}_results.feather')
+                                            cols = results_df.columns
                                             
                                             # Clear the results_df to save memory and speed up the process
-                                            results_df = pd.DataFrame(columns=results_df.columns)
+                                            del results_df
+                                            results_df = pd.DataFrame(columns=cols)
                                             
                                         global_iteration += 1
                                         tqdm_pbar.update(1)
@@ -656,7 +675,7 @@ def experiment(config: dict,
                                     first_flag = False
         
     # Final save                       
-    results_df.to_feather(f'./{results_dir}/{global_iteration}_results.feather')
+    results_df.to_feather(f'./{results_df_dir}/{global_iteration}_results.feather')
     results_df = pd.DataFrame(columns=results_df.columns)
     
     # Progress bar close

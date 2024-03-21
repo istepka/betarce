@@ -20,7 +20,7 @@ maxdeltas = []
 for c in conf:
     deltas = []
     for i in k:
-        lb, rb = stats.beta.interval(c, 1 + i, 1)
+        lb, rb = stats.beta.interval(c, 0.5 + i, 0.5)
         deltas.append(lb)
     maxdeltas.append(deltas)
     

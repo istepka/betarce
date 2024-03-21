@@ -7,14 +7,14 @@ general:
   random_seed: 345
   logging_level: INFO
   n_jobs: 4
-  save_every_n_iterations: 100
+  save_every_n_iterations: 10
 
 experiments_setup:
   ex_types:
+    - "Bootstrap-Architecture"
     - "Architecture"
     - "Seed"
     - "Bootstrap"
-    - "Bootstrap-Architecture"
     # - "Seed-Bootstrap"
     # - "Seed-Architecture"
     # - "Seed-Bootstrap-Architecture"
@@ -26,7 +26,6 @@ experiments_setup:
     - 0.8
     - 0.9
     - 0.95
-    - 0.99
   delta_robustnesses:
     - 0.5
     - 0.6
@@ -34,7 +33,7 @@ experiments_setup:
     - 0.8
     - 0.9
   x_test_size: 50
-  m_count_per_experiment: 5
+  m_count_per_experiment: 30
   cross_validation_folds: 5
   base_counterfactual_method: "gs" # - "dice"
   metrics_to_calculate:
@@ -54,6 +53,10 @@ model_hyperparameters:
         - 3
         - 4
       neurons_per_layer:
+        - 16
+        - 24
+        - 32
+        - 48
         - 64
         - 80
         - 96
@@ -110,9 +113,7 @@ model_hyperparameters:
 
 beta_rob:
   k_mlps_in_B: 
-    - 24
     - 32
-    - 48
   growingSpheresHparams:
     max_iter: 100
     n_search_samples: 100

@@ -98,11 +98,13 @@ class BetaRob(BaseExplainer):
         
         # Prepare the artifact dictionary to store the results for analytics 
         artifact_dict = {
-            'start_sample_passes_test': False,
-            'counterfactual_does_not_pass_test': False,
-            'counterfactual_does_not_have_target_class': False,
-            'counterfactual_is_nan': False,
+            'start_sample_passes_test': 0,
+            'counterfactual_does_not_pass_test': 0,
+            'counterfactual_does_not_have_target_class': 0,
+            'counterfactual_is_nan': 0,
             'highest_delta': np.nan,
+            'lower_bound_beta': np.nan,
+            'upper_bound_beta': np.nan,
         }
         
         # Prepare the function to optimize
@@ -121,7 +123,7 @@ class BetaRob(BaseExplainer):
         
         # Check if the start instance passes the goal function
         if optimized_fn_crisp(start_instance) == 1:
-            artifact_dict['start_sample_passes_test'] = True
+            artifact_dict['start_sample_passes_test'] = 1
             artifact_dict['highest_delta'] = self.__get_left_bound_beta(start_instance, beta_confidence)
             return start_instance, artifact_dict
         
@@ -132,21 +134,24 @@ class BetaRob(BaseExplainer):
         
         # Check if counterfactual is found properly
         if robust_counterfactual is None or np.any(np.isnan(robust_counterfactual)):
-            print(f'Counterfactual is NaN!: {robust_counterfactual}')
-            artifact_dict['counterfactual_is_nan'] = True
+            logging.warning(f'Counterfactual is NaN!: {robust_counterfactual}')
+            artifact_dict['counterfactual_is_nan'] = 1
             return None, artifact_dict
         
         # Check if the counterfactual passes the goal function
-        if optimized_fn_crisp(robust_counterfactual) == 1:
-            artifact_dict['counterfactual_does_not_pass_test'] = True
+        if optimized_fn_crisp(robust_counterfactual) != 1:
+            logging.warning(f'Counterfactual does not pass the goal function!: {robust_counterfactual}')
+            artifact_dict['counterfactual_does_not_pass_test'] = 1
             return None, artifact_dict
         
         # Check if the counterfactual has the target class
         if self.__get_blackbox_pred_crisp(robust_counterfactual)[0] != target_class:
-            artifact_dict['counterfactual_does_not_have_target_class'] = True
+            logging.warning(f'Counterfactual does not have the target class!: {robust_counterfactual}')
+            artifact_dict['counterfactual_does_not_have_target_class'] = 1
             return None, artifact_dict
         
         artifact_dict['highest_delta'] = self.__get_left_bound_beta(robust_counterfactual, beta_confidence)
+        artifact_dict['lower_bound_beta'], artifact_dict['upper_bound_beta'] = self.__get_credible_interval_bounds(robust_counterfactual, beta_confidence)
         
         return robust_counterfactual, artifact_dict
     
@@ -190,7 +195,7 @@ class BetaRob(BaseExplainer):
         # AND the constraints
         final_results: np.ndarray = model_preds & delta_results
         
-        logging.debug(f'BetaRob funtion_to_optimize_results: {final_results.shape}: Any true?: {np.any(final_results)}: Beta: {beta_confidence}: Delta: {delta_target} Target class: {self.target_class}: Model preds: {np.sum(model_preds)}, Delta results: {np.sum(delta_results)}, Left bounds: {[round(lb, 2) for lb in lbs]}')
+        # logging.debug(f'BetaRob funtion_to_optimize_results: {final_results.shape}: Any true?: {np.any(final_results)}: Beta: {beta_confidence}: Delta: {delta_target} Target class: {self.target_class}: Model preds: {np.sum(model_preds)}, Delta results: {np.sum(delta_results)}, Left bounds: {[round(lb, 2) for lb in lbs]}')
         
         # Return final results as 0 or 1
         if instance.shape[0] == 1:
@@ -216,7 +221,7 @@ class BetaRob(BaseExplainer):
         Get the left bound.
         '''
         # Initialize the alpha and beta prior parameters
-        alpha, beta = 1, 1
+        alpha, beta = 0.5, 0.5
         
         # Get the predictions of estimators (empirical samples)
         preds = self.__get_estimators_predictions(instance)
@@ -230,6 +235,28 @@ class BetaRob(BaseExplainer):
         # Get the lower bound of credible interval for p from Beta  
         left_bound, _ = stats.beta.interval(beta_confidence, alpha, beta)
         return left_bound
+    
+    def __get_credible_interval_bounds(self, instance: np.ndarray,
+            beta_confidence: float,
+        ) -> tuple:
+        '''
+        Get the credible interval bounds.
+        '''
+        # Initialize the alpha and beta prior parameters
+        alpha, beta = 0.5, 0.5
+        
+        # Get the predictions of estimators (empirical samples)
+        preds = self.__get_estimators_predictions(instance)
+        ones = np.sum(preds == 1)
+        zeros = np.sum(preds == 0)
+        
+        # Update the alpha and beta posterior parameters
+        alpha += ones
+        beta += zeros
+        
+        # Get the credible interval for p from Beta  
+        lb, rb = stats.beta.interval(beta_confidence, alpha, beta)
+        return lb, rb
         
     def __get_estimators_predictions(self, instance: np.ndarray) -> np.ndarray:
         '''
