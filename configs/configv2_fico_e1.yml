@@ -1,7 +1,7 @@
 general:
   data_path: data/
   model_path: models/
-  result_path: reuslts_fico/
+  result_path: reuslts_fico1/
   log_path: logs/
   random_state: 345
   random_seed: 345
