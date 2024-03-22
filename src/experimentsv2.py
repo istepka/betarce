@@ -1,6 +1,5 @@
 import time
 import numpy as np
-from sklearn.model_selection import train_test_split
 from sklearn.neighbors import NearestNeighbors
 from tqdm import tqdm
 from scipy import stats
@@ -12,6 +11,7 @@ import pandas as pd
 from create_data_examples import Dataset, DatasetPreprocessor
 from mlpclassifier import MLPClassifier, train_neural_network, train_K_mlps_in_parallel
 from explainers import DiceExplainer, GrowingSpheresExplainer, BaseExplainer
+from robx import robx_algorithm
 from utils import bootstrap_data
 from betarob import BetaRob
 
@@ -283,14 +283,13 @@ def is_robustness_achievable_for_params(k: int, beta_confidence: float, delta_ro
     return lb > delta_robustness
     
           
-def experiment(config: dict, 
-        robust_cf_method: str = 'betarob',
-    ):
+def experiment(config: dict):
     
     GENERAL = config['general']
     EXPERIMENTS_SETUP = config['experiments_setup']
     MODEL_HYPERPARAMETERS = config['model_hyperparameters']
     BETA_ROB = config['beta_rob']
+    ROBX = config['robx']
     
     # Extract the results directory
     results_dir = GENERAL['result_path']
@@ -311,6 +310,7 @@ def experiment(config: dict,
     n_jobs = GENERAL['n_jobs']
     save_every_n_iterations = GENERAL['save_every_n_iterations']
     
+    robust_cf_method = EXPERIMENTS_SETUP['robust_cf_method']
     cv_folds = EXPERIMENTS_SETUP['cross_validation_folds']
     m_count_per_experiment = EXPERIMENTS_SETUP['m_count_per_experiment']
     x_test_size = EXPERIMENTS_SETUP['x_test_size']
@@ -326,6 +326,11 @@ def experiment(config: dict,
     k_mlps_in_B_options = BETA_ROB['k_mlps_in_B']
     beta_gs_hparams = BETA_ROB['growingSpheresHparams']
     
+    # Extract the robX parameters
+    robx_taus = ROBX['taus']
+    robx_variance = ROBX['variance']
+    robx_N = ROBX['N']
+    
     # Get the model hyperparameters
     model_fixed_seed = MODEL_HYPERPARAMETERS[model_type_to_use]['model_fixed_seed']
     model_fixed_hparams = MODEL_HYPERPARAMETERS[model_type_to_use]['model_fixed_hyperparameters']
@@ -338,10 +343,16 @@ def experiment(config: dict,
     miscellaneous_df = pd.DataFrame()
     
     global_iteration = 0
-    all_iterations = len(ex_types) * len(datasets) * cv_folds * m_count_per_experiment  * x_test_size * len(beta_confidences) * len(delta_robustnesses)
+    all_iterations = len(ex_types) * len(datasets) * cv_folds * m_count_per_experiment  * x_test_size 
     
     if perform_generalizations: # If generalizations are performed, then multiply the iterations by the number of generalizations
         all_iterations *= len(ex_types)
+    
+    if robust_cf_method == 'robx': # If robx is used, then the iterations are multiplied by the number of taus
+        all_iterations *= len(robx_taus)
+    
+    if robust_cf_method == 'betarob': # If beta-robustness is used, then the iterations are multiplied by the number of beta_confidences and delta_robustnesses
+        all_iterations *= len(beta_confidences) * len(delta_robustnesses)
         
     tqdm_pbar = tqdm(total=all_iterations, desc="Overall progress")
     
@@ -517,8 +528,17 @@ def experiment(config: dict,
                             # This flag is just so that we insert the base counterfactual data only once in the results_df
                             first_flag = True
                             
-                            for beta_confidence in beta_confidences:
-                                for delta_robustness in delta_robustnesses:
+                            # If robx is used, then the beta_confidence and delta_robustness are not used so we set them to NaN
+                            if robust_cf_method == 'robx':
+                                _beta_confidences = robx_taus # use the taus for robx, but to simplify the code, we just assign it to beta_confidences variable
+                                _delta_robustnesses = [np.nan]
+                            else: # otherwise, use the given values in config
+                                _beta_confidences = beta_confidences
+                                _delta_robustnesses = delta_robustnesses
+                            
+                            # Loop over the beta_confidence and delta_robustness values and the M_2 models
+                            for beta_confidence in _beta_confidences:
+                                for delta_robustness in _delta_robustnesses:
                                     for model2_name, model2, pred_proba2, pred_crisp2 in model2_handles:
                                         
                                         
@@ -537,7 +557,7 @@ def experiment(config: dict,
                                                 base_counterfatual_model1_pred_crisp = np.nan
                                                 base_counterfatual_model2_pred_proba = np.nan
                                                 base_counterfatual_model2_pred_crisp = np.nan
-                                            record = {
+                                            base_cf_record = {
                                                 # Unique identifiers
                                                 'experiment_type': ex_type,
                                                 'dataset_name': dataset_name,
@@ -568,8 +588,8 @@ def experiment(config: dict,
                                                 'base_counterfactual_validity_model2': base_cf_validity_model2,
                                                 'base_counterfactual_time': time_base_cf,
                                             }
-                                            record = pd.DataFrame(record, index=[0])
-                                            results_df = pd.concat([results_df, record], ignore_index=True)
+                                            # record = pd.DataFrame(record, index=[0])
+                                            # results_df = pd.concat([results_df, record], ignore_index=True)
                                         
                                         # Obtain the predictions from M_2
                                         pred_proba2_sample = pred_proba2(x_test_sample)[0]
@@ -597,6 +617,16 @@ def experiment(config: dict,
                                                         classification_threshold=classification_threshold,
                                                         seed=global_random_state
                                                     )
+                                                case 'robx':
+                                                    robust_counterfactual, _ = robx_algorithm(
+                                                        X_train = X_train,
+                                                        predict_class_proba_fn = pred_proba1,
+                                                        start_counterfactual = base_cf,
+                                                        tau = beta_confidence, # This is the tau parameter in the robx algorithm, just reusing the beta_confidence for simplicity
+                                                        variance = robx_variance,
+                                                        N = robx_N,
+                                                    )
+                                                    artifact_dict = {}
                                                 case _:
                                                     raise ValueError('Unknown robust counterfactual method')
                                             time_robust_cf = time.time() - t0
@@ -639,23 +669,7 @@ def experiment(config: dict,
                                             robust_counterfactual_model2_pred_crisp = np.nan
                                         
                                         # Store the results in the frame
-                                        record = {
-                                            # Unique identifiers
-                                            'experiment_type': ex_type,
-                                            'dataset_name': dataset_name,
-                                            'k_mlps_in_B': k_mlps_in_B,
-                                            'fold_i': fold_i,
-                                            'experiment_generalization_type': ex_generalization,
-                                            'beta_confidence': beta_confidence,
-                                            'delta_robustness': delta_robustness,
-                                            'model2_name': model2_name,
-                                            # Utility data
-                                            'x_test_sample': [x_test_sample],
-                                            'y_test_sample': [y_test_sample],
-                                            'model1_pred_proba': pred_proba1_sample,
-                                            'model1_pred_crisp': pred_crisp1_sample,
-                                            'model2_pred_proba': pred_proba2_sample,
-                                            'model2_pred_crisp': pred_crisp2_sample,
+                                        robust_cf_record = {
                                             # Robust counterfactual data
                                             'robust_counterfactual': [robust_counterfactual],
                                             'robust_counterfactual_model1_pred_proba': robust_counterfactual_model1_pred_proba,
@@ -673,7 +687,7 @@ def experiment(config: dict,
                                             'robust_counterfactual_time': time_robust_cf,
                                         }
                                         # Add artifact_dict to the record
-                                        record = {**record, **artifact_dict}
+                                        record = {**base_cf_record, **robust_cf_record, **artifact_dict}
                                         record = pd.DataFrame(record, index=[0])
                                         results_df = pd.concat([results_df, record], ignore_index=True)
                             
@@ -693,7 +707,11 @@ def experiment(config: dict,
         
     # Final save                       
     results_df.to_feather(f'./{results_df_dir}/{global_iteration}_results.feather')
-    results_df = pd.DataFrame(columns=results_df.columns)
+    # results_df = pd.DataFrame(columns=results_df.columns)
+    
+    # Final miscellaneous save
+    miscellaneous_df.to_feather(f'./{miscellaneous_df_dir}/{global_iteration}_miscellaneous.feather')
+    # miscellaneous_df = pd.DataFrame(columns=miscellaneous_df.columns)
     
     # Progress bar close
     tqdm_pbar.close()

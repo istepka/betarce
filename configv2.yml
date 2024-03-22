@@ -1,28 +1,29 @@
 general:
   data_path: data/
   model_path: models/
-  result_path: reuslts_ex2/
+  result_path: results_localtesting/
   log_path: logs/
   random_state: 345
   random_seed: 345
   logging_level: INFO
   n_jobs: 4
-  save_every_n_iterations: 100
+  save_every_n_iterations: 10
 
 experiments_setup:
+  robust_cf_method: "robx" # robx or betarob
   ex_types:
     - "Bootstrap-Architecture"
+    # - "Seed-Bootstrap"
+    # - "Seed-Architecture"
+    # - "Seed-Bootstrap-Architecture"
     # - "Architecture"
     # - "Seed"
     # - "Bootstrap"
-    - "Seed-Bootstrap"
-    - "Seed-Architecture"
-    - "Seed-Bootstrap-Architecture"
   perform_generalizations: False
   datasets:
     - "fico"
-    - "breast_cancer"
     - "wine_quality"
+    # - "breast_cancer"
   beta_confidences:
     # - 0.8
     # - 0.9
@@ -34,7 +35,7 @@ experiments_setup:
     - 0.8
     - 0.9
   x_test_size: 30
-  m_count_per_experiment: 30
+  m_count_per_experiment: 5
   cross_validation_folds: 5
   base_counterfactual_method: "gs" # - "dice"
   metrics_to_calculate:
@@ -121,3 +122,13 @@ beta_rob:
     p_norm: 2
     step: 0.1
     target_proba: 0.5
+
+robx:
+  taus:
+    - 0.4 
+    - 0.5
+    - 0.6
+    - 0.7
+    - 0.8
+  variance: 0.01
+  N: 1000
