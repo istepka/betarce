@@ -279,7 +279,7 @@ def is_robustness_achievable_for_params(k: int, beta_confidence: float, delta_ro
     '''
     Check if with the given parameters the robustness is achievable.
     '''
-    lb, _ = stats.beta.interval(beta_confidence, 1 + k, 1)
+    lb, _ = stats.beta.interval(beta_confidence, 0.5 + k, 0.5)
     return lb > delta_robustness
     
           
@@ -328,7 +328,7 @@ def experiment(config: dict):
     
     # Extract the robX parameters
     robx_taus = ROBX['taus']
-    robx_variance = ROBX['variance']
+    robx_variances = ROBX['variances']
     robx_N = ROBX['N']
     
     # Get the model hyperparameters
@@ -531,7 +531,7 @@ def experiment(config: dict):
                             # If robx is used, then the beta_confidence and delta_robustness are not used so we set them to NaN
                             if robust_cf_method == 'robx':
                                 _beta_confidences = robx_taus # use the taus for robx, but to simplify the code, we just assign it to beta_confidences variable
-                                _delta_robustnesses = [np.nan]
+                                _delta_robustnesses =  robx_variances # use the variances for robx, but to simplify the code, we just assign it to delta_robustnesses variable
                             else: # otherwise, use the given values in config
                                 _beta_confidences = beta_confidences
                                 _delta_robustnesses = delta_robustnesses
@@ -599,7 +599,7 @@ def experiment(config: dict):
                                         # Check if the robustness is achievable and if the base counterfactual is not None
                                         achievable = is_robustness_achievable_for_params(k_mlps_in_B, beta_confidence, delta_robustness)
                                         isNone = check_is_none(base_cf)
-                                        if achievable and not isNone:
+                                        if (achievable or not achievable and robust_cf_method == 'robx') and not isNone:
                                             t0 = time.time()
                                             match robust_cf_method:
                                                 case 'betarob':
@@ -623,7 +623,7 @@ def experiment(config: dict):
                                                         predict_class_proba_fn = pred_proba1,
                                                         start_counterfactual = base_cf,
                                                         tau = beta_confidence, # This is the tau parameter in the robx algorithm, just reusing the beta_confidence for simplicity
-                                                        variance = robx_variance,
+                                                        variance = delta_robustness,
                                                         N = robx_N,
                                                     )
                                                     artifact_dict = {}

@@ -125,6 +125,7 @@ class BetaRob(BaseExplainer):
         if optimized_fn_crisp(start_instance) == 1:
             artifact_dict['start_sample_passes_test'] = 1
             artifact_dict['highest_delta'] = self.__get_left_bound_beta(start_instance, beta_confidence)
+            artifact_dict['lower_bound_beta'], artifact_dict['upper_bound_beta'] = self.__get_credible_interval_bounds(start_instance, beta_confidence)
             return start_instance, artifact_dict
         
         # Generate the robust counterfactual

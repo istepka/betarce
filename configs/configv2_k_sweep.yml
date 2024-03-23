@@ -1,33 +1,31 @@
 general:
   data_path: data/
   model_path: models/
-  result_path: results/results_robx_sweep/
+  result_path: results/results_k_sweep/
   log_path: logs/
   random_state: 345
   random_seed: 345
   logging_level: INFO
   n_jobs: 4
-  save_every_n_iterations: 10
+  save_every_n_iterations: 100
 
 experiments_setup:
-  robust_cf_method: "robx" # robx or betarob
+  robust_cf_method: "betarob" # robx or betarob
   ex_types:
     - "Bootstrap-Architecture"
-    - "Seed-Bootstrap"
     - "Seed-Architecture"
     - "Seed-Bootstrap-Architecture"
-    - "Architecture"
-    - "Seed"
-    - "Bootstrap"
   perform_generalizations: False
   datasets:
-    - "fico"
     - "wine_quality"
-    - "breast_cancer"
   beta_confidences:
     - 0.95
   delta_robustnesses:
     - 0.5
+    - 0.6
+    - 0.7
+    - 0.8
+    - 0.9
   x_test_size: 30
   m_count_per_experiment: 30
   cross_validation_folds: 3
@@ -109,7 +107,12 @@ model_hyperparameters:
 
 beta_rob:
   k_mlps_in_B: 
+    - 16
+    - 24
     - 32
+    - 36
+    - 40
+    - 44
   growingSpheresHparams:
     max_iter: 100
     n_search_samples: 100
@@ -117,15 +120,8 @@ beta_rob:
     step: 0.1
     target_proba: 0.5
 
+
 robx:
-  taus:
-    - 0.3
-    - 0.4 
-    - 0.5
-    - 0.6
-    - 0.7
-    - 0.8
-  variances: 
-    - 0.01
-    - 0.1
+  tau: 0.7
+  variance: 0.01
   N: 1000

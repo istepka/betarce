@@ -10,7 +10,7 @@ general:
   save_every_n_iterations: 10
 
 experiments_setup:
-  robust_cf_method: "robx" # robx or betarob
+  robust_cf_method: "betarob" # robx or betarob
   ex_types:
     - "Bootstrap-Architecture"
     # - "Seed-Bootstrap"
@@ -29,10 +29,10 @@ experiments_setup:
     # - 0.9
     - 0.95
   delta_robustnesses:
-    - 0.5
-    - 0.6
-    - 0.7
-    - 0.8
+    # - 0.5
+    # - 0.6
+    # - 0.7
+    # - 0.8
     - 0.9
   x_test_size: 30
   m_count_per_experiment: 5
@@ -130,5 +130,6 @@ robx:
     - 0.6
     - 0.7
     - 0.8
-  variance: 0.01
+  variances: 
+    - 0.01
   N: 1000
