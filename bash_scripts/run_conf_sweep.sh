@@ -4,7 +4,7 @@
 #SBATCH -w obl1
 #SBATCH --nodes 1
 #SBATCH --cpus-per-task 1
-#SBATCH --time=72:00:00               # Time limit hrs:min:sec
+#SBATCH --time=144:00:00               # Time limit hrs:min:sec
 #SBATCH --output=logs/conf_sweep_%j.out
 #SBATCH --error=logs/conf_sweep_%j.err
 
