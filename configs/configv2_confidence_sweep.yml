@@ -127,6 +127,8 @@ beta_rob:
 
 
 robx:
-  tau: 0.7
-  variance: 0.01
+  taus:
+    - 0.7
+  variances: 
+    - 0.01
   N: 1000
