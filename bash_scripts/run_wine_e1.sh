@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=statrob    # Job name
+#SBATCH --job-name=wine_e1    # Job name
 #SBATCH --partition obl
 #SBATCH -w obl1
 #SBATCH --nodes 1
