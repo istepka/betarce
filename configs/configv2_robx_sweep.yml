@@ -16,9 +16,9 @@ experiments_setup:
     - "Seed-Bootstrap"
     - "Seed-Architecture"
     - "Seed-Bootstrap-Architecture"
-    - "Architecture"
-    - "Seed"
-    - "Bootstrap"
+    # - "Architecture"
+    # - "Seed"
+    # - "Bootstrap"
   perform_generalizations: False
   datasets:
     - "fico"
