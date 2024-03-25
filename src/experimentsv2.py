@@ -557,43 +557,37 @@ def experiment(config: dict):
                                                 base_counterfatual_model1_pred_crisp = np.nan
                                                 base_counterfatual_model2_pred_proba = np.nan
                                                 base_counterfatual_model2_pred_crisp = np.nan
-                                            base_cf_record = {
-                                                # Unique identifiers
-                                                'experiment_type': ex_type,
-                                                'dataset_name': dataset_name,
-                                                'k_mlps_in_B': k_mlps_in_B,
-                                                'fold_i': fold_i,
-                                                'experiment_generalization_type': ex_generalization,
-                                                'beta_confidence': beta_confidence,
-                                                'delta_robustness': delta_robustness,
-                                                'model2_name': model2_name,
-                                                # Utility data
-                                                'x_test_sample': [x_test_sample],
-                                                'y_test_sample': [y_test_sample],
-                                                'model1_pred_proba': pred_proba1_sample,
-                                                'model1_pred_crisp': pred_crisp1_sample,
-                                                'model2_pred_proba': pred_proba2(x_test_sample),
-                                                'model2_pred_crisp': pred_crisp2(x_test_sample),
-                                                # Base counterfactual data
-                                                'base_counterfactual': [base_cf],
-                                                'base_counterfactual_model1_pred_proba': base_counterfatual_model1_pred_proba,
-                                                'base_counterfactual_model1_pred_crisp': base_counterfatual_model1_pred_crisp,
-                                                'base_counterfactual_model2_pred_proba': base_counterfatual_model2_pred_proba,
-                                                'base_counterfactual_model2_pred_crisp': base_counterfatual_model2_pred_crisp,
-                                                'base_counterfactual_validity': base_metrics_model1['validity'],
-                                                'base_counterfactual_proximityL1': base_metrics_model1['proximityL1'],
-                                                'base_counterfactual_proximityL2': base_metrics_model1['proximityL2'],
-                                                'base_counterfactual_plausibility': base_metrics_model1['plausibility'],
-                                                'base_counterfactual_discriminative_power': base_metrics_model1['dpow'],
-                                                'base_counterfactual_validity_model2': base_cf_validity_model2,
-                                                'base_counterfactual_time': time_base_cf,
-                                            }
-                                            # record = pd.DataFrame(record, index=[0])
-                                            # results_df = pd.concat([results_df, record], ignore_index=True)
-                                        
-                                        # Obtain the predictions from M_2
-                                        pred_proba2_sample = pred_proba2(x_test_sample)[0]
-                                        pred_crisp2_sample = pred_crisp2(x_test_sample)[0]
+                                        base_cf_record = {
+                                            # Unique identifiers
+                                            'experiment_type': ex_type,
+                                            'dataset_name': dataset_name,
+                                            'k_mlps_in_B': k_mlps_in_B,
+                                            'fold_i': fold_i,
+                                            'experiment_generalization_type': ex_generalization,
+                                            'beta_confidence': beta_confidence,
+                                            'delta_robustness': delta_robustness,
+                                            'model2_name': model2_name,
+                                            # Utility data
+                                            'x_test_sample': [x_test_sample],
+                                            'y_test_sample': [y_test_sample],
+                                            'model1_pred_proba': pred_proba1_sample,
+                                            'model1_pred_crisp': pred_crisp1_sample,
+                                            'model2_pred_proba': pred_proba2(x_test_sample),
+                                            'model2_pred_crisp': pred_crisp2(x_test_sample),
+                                            # Base counterfactual data
+                                            'base_counterfactual': [base_cf],
+                                            'base_counterfactual_model1_pred_proba': base_counterfatual_model1_pred_proba,
+                                            'base_counterfactual_model1_pred_crisp': base_counterfatual_model1_pred_crisp,
+                                            'base_counterfactual_model2_pred_proba': base_counterfatual_model2_pred_proba,
+                                            'base_counterfactual_model2_pred_crisp': base_counterfatual_model2_pred_crisp,
+                                            'base_counterfactual_validity': base_metrics_model1['validity'],
+                                            'base_counterfactual_proximityL1': base_metrics_model1['proximityL1'],
+                                            'base_counterfactual_proximityL2': base_metrics_model1['proximityL2'],
+                                            'base_counterfactual_plausibility': base_metrics_model1['plausibility'],
+                                            'base_counterfactual_discriminative_power': base_metrics_model1['dpow'],
+                                            'base_counterfactual_validity_model2': base_cf_validity_model2,
+                                            'base_counterfactual_time': time_base_cf,
+                                        }
                                         
                                         # Obtain the robust counterfactual
                                         # Check if the robustness is achievable and if the base counterfactual is not None
