@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=robx_sweep    # Job name
-#SBATCH --partition obl
-#SBATCH -w obl1
+#SBATCH --partition hgx
+#SBATCH -w hgx2
 #SBATCH --nodes 1
 #SBATCH --cpus-per-task 1
 #SBATCH --time=144:00:00               # Time limit hrs:min:sec

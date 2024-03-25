@@ -1,10 +1,10 @@
 #!/bin/bash
 #SBATCH --job-name=fico_e2    # Job name
-#SBATCH --partition obl
-#SBATCH -w obl1
+#SBATCH --partition hgx
+#SBATCH -w hgx2
 #SBATCH --nodes 1
 #SBATCH --cpus-per-task 1
-#SBATCH --time=72:00:00               # Time limit hrs:min:sec
+#SBATCH --time=144:00:00               # Time limit hrs:min:sec
 #SBATCH --output=logs/output_%j.out
 #SBATCH --error=logs/error_%j.err
 
