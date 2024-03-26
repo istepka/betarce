@@ -1,5 +1,4 @@
 #!/bin/bash
-#SBATCH --job-name=bc_e3   # Job name
 #SBATCH --partition hgx
 #SBATCH -w hgx2
 #SBATCH --nodes 1

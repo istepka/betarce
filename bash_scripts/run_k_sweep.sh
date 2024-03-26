@@ -1,5 +1,4 @@
 #!/bin/bash
-#SBATCH --job-name=k_sweep    # Job name
 #SBATCH --partition hgx
 #SBATCH -w hgx2
 #SBATCH --nodes 1
