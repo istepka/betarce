@@ -7,9 +7,9 @@
 #SBATCH --output=logs/output_%j.out
 #SBATCH --error=logs/error_%j.err
 
-DATASET="diabetes"
-EXPERIMENT="e3"
-CONFIG_TO_USE="configs/configv2_${DATASET}_${EXPERIMENT}.yml"
+DATASET="fico"
+EXPERIMENT="e1"
+CONFIG_TO_USE="configs/configv2_${DATASET}_${EXPERIMENT}_dice.yml"
 
 source /home/inf148179/anaconda3/bin/activate
 conda activate robustcf
