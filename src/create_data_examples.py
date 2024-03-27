@@ -45,7 +45,7 @@ class Dataset:
             Initialize the dataset.
             
             Parameters:
-                - name: the name of the dataset (str) should be one of ['german', 'fico', 'compas', 'donuts', 'moons']
+                - name: the name of the dataset (str) should be one of ['german', 'fico', 'compas', 'donuts', 'moons', 'breast_cancer', 'wine_quality', 'diabetes', 'german_binary']
                 - random_state: the random state (int)
             '''
             
@@ -55,6 +55,8 @@ class Dataset:
             match self.name:
                 case 'german':
                     self.data = _german()
+                case 'german_binary':
+                    self.data = _german_binary()
                 case 'fico':
                     self.data = _fico()
                 case 'compas':
@@ -67,6 +69,8 @@ class Dataset:
                     self.data = _breast_cancer()
                 case 'wine_quality':
                     self.data = _wine_quality()
+                case 'diabetes':
+                    self.data = _diabetes()
                 case _:
                     raise ValueError(f'Unknown dataset {self.name}')
                 
@@ -407,6 +411,81 @@ def _german(path: str = 'data/german.csv') -> dict:
     
     return data
 
+def _german_binary(path: str = 'data/german.csv') -> dict:
+    '''
+    Load the german dataset. 
+    
+    binarize the categorical columns
+    '''
+    raw_df = pd.read_csv(path)
+    
+    categorical_columns = [
+        'checking_status', 'credit_history', 'purpose', 
+        'savings_status', 'employment', 'personal_status', 
+        'other_parties', 'property_magnitude', 'other_payment_plans', 
+        'housing', 'job', 'own_telephone', 'foreign_worker'
+        ]
+    
+    continuous_columns = [
+        'duration', 'credit_amount', 'installment_commitment', 
+        'residence_since', 'age', 'existing_credits', 'num_dependents'
+        ]
+    
+    target_column = 'class'
+    
+    monotonic_increase_columns = []
+    monotonic_decrease_columns = []
+    
+    freeze_columns = ['foreign_worker']
+    
+    feature_ranges = {
+        'duration': [int(raw_df['duration'].min()), int(raw_df['duration'].max())],
+        'credit_amount': [int(raw_df['credit_amount'].min()), int(raw_df['credit_amount'].max())],
+        'installment_commitment': [int(raw_df['installment_commitment'].min()), int(raw_df['installment_commitment'].max())],
+        'residence_since': [int(raw_df['residence_since'].min()), int(raw_df['residence_since'].max())],
+        'existing_credits': [int(raw_df['existing_credits'].min()), int(raw_df['existing_credits'].max())],
+        'num_dependents': [int(raw_df['num_dependents'].min()), int(raw_df['num_dependents'].max())],
+        'age': [18, int(raw_df['age'].max())],
+    }
+    
+    binarized = {
+        'has_checking': raw_df['checking_status'].apply(lambda x: 1 if x != 'no checking' else 0),
+        'good_credit_history': raw_df['credit_history'].apply(lambda x: 1 if x in ['critical/other existing credit', 'delayed previously'] else 0),
+        'no_or_low_savings': raw_df['savings_status'].apply(lambda x: 1 if x in ['no known savings', '<100'] else 0),
+        'unemployed': raw_df['employment'].apply(lambda x: 1 if x == 'unemployed' else 0),
+        'single': raw_df['personal_status'].apply(lambda x: 1 if x == 'male single' else 0),
+        'other_parties': raw_df['other_parties'].apply(lambda x: 1 if x != 'none' else 0),
+        'has_real_estate': raw_df['property_magnitude'].apply(lambda x: 1 if x == 'real estate' else 0),
+        'other_payment_plans': raw_df['other_payment_plans'].apply(lambda x: 1 if x != 'none' else 0),
+        'house_owner': raw_df['housing'].apply(lambda x: 1 if x == 'own' else 0),
+        'good_job_prospects': raw_df['job'].apply(lambda x: 1 if x in ['skilled', 'high qualif/self emp/mgmt'] else 0),
+        'has_telephone': raw_df['own_telephone'].apply(lambda x: 1 if x == 'yes' else 0),
+        'is_foreign_worker': raw_df['foreign_worker'].apply(lambda x: 1 if x == 'yes' else 0),
+    }
+
+    raw_df = raw_df.drop(columns=categorical_columns)
+    raw_df = pd.concat([raw_df, pd.DataFrame(binarized)], axis=1)
+    
+    raw_df = raw_df.dropna(how='any', axis=0)
+    
+    categorical_columns = list(binarized.keys())
+    
+    print(raw_df.info())
+    
+    data = {
+        'raw_df': raw_df,
+        'categorical_columns': [],
+        'continuous_columns': continuous_columns,
+        'target_column': target_column,
+        'monotonic_increase_columns': monotonic_increase_columns,
+        'monotonic_decrease_columns': monotonic_decrease_columns,
+        'freeze_columns': freeze_columns,
+        'feature_ranges': feature_ranges,
+        'binary_columns': list(binarized.keys())
+    }
+    
+    return data
+    
 def _fico(path: str = 'data/fico.csv') -> dict:
     '''
     Load the fico dataset.
@@ -495,6 +574,32 @@ def _breast_cancer(path: str = 'data/breast_cancer.csv') -> dict:
     continuous_columns = raw_df.columns.tolist()
     continuous_columns.remove('diagnosis')
     target_column = 'diagnosis'
+    
+    freeze_columns = []
+    feature_ranges = {k: [raw_df[k].min(), raw_df[k].max()] for k in continuous_columns}
+    monotonic_increase_columns = []
+    monotonic_decrease_columns = []
+    
+    data = {
+        'raw_df': raw_df,
+        'categorical_columns': categorical_columns,
+        'continuous_columns': continuous_columns,
+        'target_column': target_column,
+        'monotonic_increase_columns': monotonic_increase_columns,
+        'monotonic_decrease_columns': monotonic_decrease_columns,
+        'freeze_columns': freeze_columns,
+        'feature_ranges': feature_ranges
+    }
+  
+    return data
+  
+def _diabetes(path: str = 'data/diabetes.csv') -> dict:
+    #Pregnancies,Glucose,BloodPressure,SkinThickness,Insulin,BMI,DiabetesPedigreeFunction,Age,Outcome
+    raw_df = pd.read_csv(path)
+    categorical_columns = []
+    continuous_columns = raw_df.columns.tolist()
+    continuous_columns.remove('Outcome')
+    target_column = 'Outcome'
     
     freeze_columns = []
     feature_ranges = {k: [raw_df[k].min(), raw_df[k].max()] for k in continuous_columns}
@@ -646,7 +751,7 @@ if __name__ == '__main__':
     # X, y = create_two_donuts()
     # plot_data(X, y)
     
-    german_dataset = Dataset(name='moons')
+    german_dataset = Dataset(name='german_binary')
     
     german_preprocessor = DatasetPreprocessor(german_dataset, standardize_data='minmax', one_hot=True)
     print(german_preprocessor.X_train.head())
