@@ -1,6 +1,6 @@
 #!/bin/bash
-#SBATCH --partition hgx
-#SBATCH -w hgx2
+#SBATCH -p pmem
+#SBATCH -w pmem-4
 #SBATCH --nodes 1
 #SBATCH --cpus-per-task 1
 #SBATCH --time=144:00:00               # Time limit hrs:min:sec

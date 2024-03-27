@@ -12,7 +12,7 @@ general:
 experiments_setup:
   robust_cf_method: "betarob" # robx or betarob
   ex_types:
-    - "Seed"
+    # - "Seed"
     - "Architecture"
     - "Bootstrap"
   perform_generalizations: True
