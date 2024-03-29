@@ -11,6 +11,7 @@ import pandas as pd
 from create_data_examples import Dataset, DatasetPreprocessor
 from mlpclassifier import MLPClassifier, train_neural_network, train_K_mlps_in_parallel
 from rfclassifier import RFClassifier, train_random_forest, train_K_rfs_in_parallel
+from dtclassifier import DecisionTree, train_decision_tree, train_K_dts_in_parallel
 from baseclassifier import BaseClassifier
 from explainers import DiceExplainer, GrowingSpheresExplainer, BaseExplainer
 from robx import robx_algorithm
@@ -27,6 +28,8 @@ def train_model(X_train, y_train, model_type: str, seed: int, hparams: dict) -> 
         m, pp, pc = train_neural_network(X_train, y_train, seed, hparams)
     elif model_type == 'random_forest':
         m, pp, pc = train_random_forest(X_train, y_train, seed, hparams)
+    elif model_type == 'decision_tree':
+        m, pp, pc = train_decision_tree(X_train, y_train, seed, hparams)
     else:
         raise ValueError(f"Unknown model type: {model_type}")
     
@@ -92,7 +95,20 @@ def train_B(ex_type: str,
                 K=k_mlps_in_B,
                 n_jobs=n_jobs,
             )
-            models = [model for partial_results in results for model in partial_results['models']]    
+            models = [model for partial_results in results for model in partial_results['models']]   
+        case 'decision_tree':
+            results = train_K_dts_in_parallel(X_train=X_train,
+                y_train=y_train,
+                X_test=X_test,
+                y_test=y_test,
+                hparams=hparamsB,
+                bootstrap=bootstrapB,
+                fixed_hparams=fixed_hparams,
+                fixed_seed=seedB,
+                K=k_mlps_in_B,
+                n_jobs=n_jobs,
+            )
+            models = [model for partial_results in results for model in partial_results['models']]
         case _:
             raise ValueError('Unknown model type. Cannot train B models.')
         
