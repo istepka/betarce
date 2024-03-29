@@ -40,12 +40,16 @@ class DecisionTree(BaseClassifier):
             x = x.reshape(1, -1)
         return self.model.predict_proba(x)[:, 1].flatten()
     
-    def predict_proba(self, x) -> np.ndarray[float]:
-        assert isinstance(x, np.ndarray), 'Input must be a numpy array'
+    def predict_proba(self, x: np.ndarray | pd.DataFrame) -> np.ndarray[float]: 
+        if isinstance(x, pd.DataFrame):
+            x = x.values
+        if len(x.shape) == 1:
+            x = x.reshape(1, -1)
         return self.forward(x)
     
-    def predict_crisp(self, x: np.ndarray, threshold=0.5) -> np.ndarray[int]:
-        assert isinstance(x, np.ndarray), 'Input must be a numpy array'
+    def predict_crisp(self, x: np.ndarray | pd.DataFrame, threshold=0.5) -> np.ndarray[int]:
+        if isinstance(x, pd.DataFrame):
+            x = x.values
         if len(x.shape) == 1:
             x = x.reshape(1, -1)
         pred = self.model.predict(x)
