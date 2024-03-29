@@ -12,17 +12,17 @@ general:
 experiments_setup:
   robust_cf_method: "betarob" # robx or betarob
   ex_types:
-    - "Bootstrap-Architecture"
+    - "Architecture"
+    - "Seed"
+    # - "Bootstrap-Architecture"
     # - "Seed-Bootstrap"
     # - "Seed-Architecture"
     # - "Seed-Bootstrap-Architecture"
-    # - "Architecture"
-    # - "Seed"
     # - "Bootstrap"
   perform_generalizations: False
   datasets:
     - "fico"
-    - "wine_quality"
+    # - "wine_quality"
     # - "breast_cancer"
   beta_confidences:
     # - 0.8
@@ -34,9 +34,9 @@ experiments_setup:
     # - 0.7
     # - 0.8
     - 0.9
-  x_test_size: 30
-  m_count_per_experiment: 5
-  cross_validation_folds: 5
+  x_test_size: 2
+  m_count_per_experiment: 2
+  cross_validation_folds: 3
   base_counterfactual_method: "gs" # - "dice"
   metrics_to_calculate:
     - "validity"
@@ -92,15 +92,18 @@ model_hyperparameters:
   random_forest:
     model_hyperparameters_pool:
       n_estimators:
-        - 25
+        - 10
+        - 20
+        - 30
+        - 40
         - 50
-        - 75
+        - 60
+        - 70
+        - 80
+        - 90
         - 100
-        - 125
-        - 150
-        - 175
-        - 200
       max_depth:
+        - 4
         - 8
         - 10
         - 12
@@ -108,9 +111,23 @@ model_hyperparameters:
         - 16
         - 18
         - 20
+        - 24
+      min_samples_split:
+        - 2
+        - 3
+        - 4
+        - 5
+      min_samples_leaf:
+        - 1
+        - 2
+        - 3
+        - 4
+        - 5
     model_fixed_hyperparameters:
-      n_estimators: 100
+      n_estimators: 50
       max_depth: 10
+      min_samples_split: 2
+      min_samples_leaf: 1
     model_fixed_seed: 42
 
 beta_rob:
