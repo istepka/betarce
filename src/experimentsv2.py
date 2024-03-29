@@ -10,6 +10,8 @@ import pandas as pd
 
 from create_data_examples import Dataset, DatasetPreprocessor
 from mlpclassifier import MLPClassifier, train_neural_network, train_K_mlps_in_parallel
+from rfclassifier import RFClassifier, train_random_forest, train_K_rfs_in_parallel
+from baseclassifier import BaseClassifier
 from explainers import DiceExplainer, GrowingSpheresExplainer, BaseExplainer
 from robx import robx_algorithm
 from utils import bootstrap_data
@@ -24,7 +26,7 @@ def train_model(X_train, y_train, model_type: str, seed: int, hparams: dict) -> 
     if model_type == 'neural_network':
         m, pp, pc = train_neural_network(X_train, y_train, seed, hparams)
     elif model_type == 'random_forest':
-        raise NotImplementedError("Random forest not implemented")
+        m, pp, pc = train_random_forest(X_train, y_train, seed, hparams)
     else:
         raise ValueError(f"Unknown model type: {model_type}")
     
@@ -64,21 +66,35 @@ def train_B(ex_type: str,
         hparamsB = model_base_hyperparameters | model_fixed_hparams
     
     
-    if model_type_to_use == 'neural_network':
-        results = train_K_mlps_in_parallel(X_train=X_train,
-            y_train=y_train,
-            X_test=X_test,
-            y_test=y_test,
-            hparams=hparamsB,
-            bootstrap=bootstrapB,
-            fixed_hparams=fixed_hparams,
-            fixed_seed=seedB,
-            K=k_mlps_in_B,
-            n_jobs=n_jobs,
-        )
-        models = [model for partial_results in results for model in partial_results['models']]
-    else:
-        raise NotImplementedError("Random forest not implemented")
+    match model_type_to_use:
+        case 'neural_network':
+            results = train_K_mlps_in_parallel(X_train=X_train,
+                y_train=y_train,
+                X_test=X_test,
+                y_test=y_test,
+                hparams=hparamsB,
+                bootstrap=bootstrapB,
+                fixed_hparams=fixed_hparams,
+                fixed_seed=seedB,
+                K=k_mlps_in_B,
+                n_jobs=n_jobs,
+            )
+            models = [model for partial_results in results for model in partial_results['models']]
+        case 'random_forest':
+            results = train_K_rfs_in_parallel(X_train=X_train,
+                y_train=y_train,
+                X_test=X_test,
+                y_test=y_test,
+                hparams=hparamsB,
+                bootstrap=bootstrapB,
+                fixed_hparams=fixed_hparams,
+                fixed_seed=seedB,
+                K=k_mlps_in_B,
+                n_jobs=n_jobs,
+            )
+            models = [model for partial_results in results for model in partial_results['models']]    
+        case _:
+            raise ValueError('Unknown model type. Cannot train B models.')
         
     return models
         
@@ -109,7 +125,7 @@ def train_model_2(X_train, y_train, ex_type : str, model_type: str, hparams: dic
 def prepare_base_counterfactual_explainer(
         base_cf_method: str,
         hparams: dict,
-        model: MLPClassifier,
+        model: BaseClassifier,
         X_train: pd.DataFrame,
         y_train: pd.Series | np.ndarray,
         dataset_preprocessor: DatasetPreprocessor,

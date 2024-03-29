@@ -12,20 +12,17 @@ class RFClassifier(BaseClassifier):
     
     model: RandomForestClassifier
     
-    def __init__(self, hparams: dict) -> None:
+    def __init__(self, hparams: dict, seed: int) -> None:
         '''
         '''
-        super(RFClassifier, self).__init__()
-        
         self.hparams = hparams
         
         self.n_estimators = hparams['n_estimators']
         self.max_depth = hparams['max_depth']
         self.min_samples_split = hparams['min_samples_split']
         self.min_samples_leaf = hparams['min_samples_leaf']
-        
-        seed = hparams['seed']
-        
+        self.criterion = hparams['criterion']
+
         np.random.seed(seed)
         
         self.build_model()
@@ -50,9 +47,10 @@ class RFClassifier(BaseClassifier):
     
     def predict_crisp(self, x: np.ndarray, threshold=0.5) -> np.ndarray[int]:
         assert isinstance(x, np.ndarray), 'Input must be a numpy array'
-        pred = self.predict_proba(x)
-            
-        return (pred > threshold).astype(int)
+        if len(x.shape) == 1:
+            x = x.reshape(1, -1)
+        pred = self.model.predict(x)
+        return pred.astype(int).flatten()
     
     def fit(self, X_train: np.ndarray, y_train: np.ndarray) -> None:
         # Reshape y_train
@@ -95,7 +93,7 @@ def train_random_forest(X_train, y_train, seed: int, hparams: dict, split: float
     logging.debug('Training RF model')
     
     # Initialize the model
-    model = RFClassifier(hparams)
+    model = RFClassifier(hparams, seed)
     
     # Create a validation set internally
     X_train1, X_val1, y_train1, y_val1 = train_test_split(X_train, y_train, test_size=1 - split, random_state=seed)
@@ -144,7 +142,7 @@ def train_K_RFs(X_train,
     # Train K models
     for k in range(K):
         
-        model_hparams = hparams.copy()
+        model_hparams = {}
             
         # Sample seed
         if fixed_seed is not None:
@@ -165,12 +163,20 @@ def train_K_RFs(X_train,
             model_hparams['max_depth'] = np.random.choice(hparams['max_depth'])
             model_hparams['min_samples_split'] = np.random.choice(hparams['min_samples_split'])
             model_hparams['min_samples_leaf'] = np.random.choice(hparams['min_samples_leaf'])
+            model_hparams['criterion'] = np.random.choice(hparams['criterion'])
+        else:
+            model_hparams['n_estimators'] = hparams['n_estimators']
+            model_hparams['max_depth'] = hparams['max_depth']
+            model_hparams['min_samples_split'] = hparams['min_samples_split']
+            model_hparams['min_samples_leaf'] = hparams['min_samples_leaf']
+            model_hparams['criterion'] = hparams['criterion']
             
         model_hparams['seed'] = seed
+        print(f'Model {k+1} hyperparameters: {model_hparams}')
         
         np.random.seed(seed)    
             
-        rf = RFClassifier(model_hparams)
+        rf = RFClassifier(model_hparams, seed)
         
         # Train the model
         rf.fit(X_train, y_train)
@@ -234,9 +240,9 @@ def train_K_rfs_in_parallel(X_train, y_train, X_test, y_test,
         fixed_hparams,
         fixed_seed,
         bootstrap,
-        bootstrap_seed,
-        k_for_each_job
-    ) for _ in range(n_jobs))
+        bootstrap_seed + i * k_for_each_job,
+        K=k_for_each_job,
+    ) for i in range(n_jobs))
     
     return results
     
