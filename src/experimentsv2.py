@@ -128,11 +128,11 @@ def train_model_2(X_train, y_train, ex_type : str, model_type: str, hparams: dic
         
     # Should seed vary?
     if 'seed' in ex_type.lower():
-        # If should not vary, then use the fixed seed
-        seed = hparams['model_fixed_seed']
-    else:
         # If should vary, then use a random seed
         seed = np.random.randint(0, 1000)
+    else:
+        # If should not vary, then use the fixed seed
+        seed = hparams['model_fixed_seed']
         
     m, pp, pc = train_model(X_train_b, y_train_b, model_type, seed, hparams)
     
@@ -499,7 +499,7 @@ def experiment(config: dict):
                             
                             # Train M_2
                             # Should architecture vary? 
-                            if 'architecture' in ex_type.lower():
+                            if 'architecture' in ex_generalization.lower():
                                 # If should vary, then sample from the pool of hyperparameters
                                 hparams2 = {}
                                 for _param, _options in model_hyperparameters_pool.items():
@@ -509,7 +509,7 @@ def experiment(config: dict):
                                 # If should not vary, then use the fixed hyperparameters
                                 hparams2 = model_base_hyperparameters | model_fixed_hparams
                             
-                            if 'seed' in ex_type.lower(): # append the fixed seed also if needed
+                            if 'seed' not in ex_generalization.lower(): # append the fixed seed also if needed
                                 hparams2['model_fixed_seed'] = model_fixed_seed
                             
                             t0 = time.time() 

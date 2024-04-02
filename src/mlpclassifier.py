@@ -273,7 +273,7 @@ def train_K_mlps(X_train,
         if fixed_seed is not None:
             seed = fixed_seed
         else:
-            seed = np.random.randint(1, 100_000)
+            seed = np.random.randint(1, 100) + k + bootstrap_seed
         
         
         # Bootstrap the data
