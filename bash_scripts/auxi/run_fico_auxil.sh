@@ -1,14 +1,13 @@
 #!/bin/bash
 #SBATCH -p pmem
-#SBATCH -w pmem-1
+#SBATCH -w pmem-2
 #SBATCH --nodes 1
 #SBATCH --cpus-per-task 1
 #SBATCH --time=144:00:00               # Time limit hrs:min:sec
-#SBATCH --output=logs/generalization_%j.out
-#SBATCH --error=logs/generalization_%j.err
+#SBATCH --output=logs/output_%j.out
+#SBATCH --error=logs/error_%j.err
 
-
-CONFIG_TO_USE="configs/configv2_generalization.yml"
+CONFIG_TO_USE="configs/auxi/configv2_fico_auxil.yml"
 
 source /home/inf148179/anaconda3/bin/activate
 conda activate robustcf
