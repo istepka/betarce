@@ -1,7 +1,7 @@
 general:
   data_path: data/
   model_path: models/
-  result_path: results/results_generalization/
+  result_path: results/results_k_sweep_auxil/
   log_path: logs/
   random_state: 345
   random_seed: 345
@@ -12,24 +12,22 @@ general:
 experiments_setup:
   robust_cf_method: "betarob" # robx or betarob
   ex_types:
-    - "Seed"
-    - "Architecture"
-    - "Seed-Architecture"
-    - "Seed-Bootstrap"
     - "Architecture"
     - "Bootstrap"
-  perform_generalizations: True
+    - "Bootstrap-Architecture"
+  perform_generalizations: False
   datasets:
-    - "wine_quality"
     - "fico"
   beta_confidences:
     - 0.95
   delta_robustnesses:
+    - 0.5
+    - 0.6
     - 0.7
     - 0.8
     - 0.9
-  x_test_size: 20
-  m_count_per_experiment: 15
+  x_test_size: 30
+  m_count_per_experiment: 30
   cross_validation_folds: 3
   base_counterfactual_method: "gs" # - "dice"
   metrics_to_calculate:
@@ -109,7 +107,12 @@ model_hyperparameters:
 
 beta_rob:
   k_mlps_in_B: 
+    - 8
+    - 16
+    - 24
     - 32
+    - 36
+    - 44
   growingSpheresHparams:
     max_iter: 100
     n_search_samples: 100

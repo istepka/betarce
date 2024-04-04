@@ -1,14 +1,14 @@
 #!/bin/bash
-#SBATCH -p pmem
-#SBATCH -w pmem-3
+#SBATCH -p obl
+#SBATCH -w obl2
 #SBATCH --nodes 1
 #SBATCH --cpus-per-task 1
 #SBATCH --time=144:00:00               # Time limit hrs:min:sec
-#SBATCH --output=logs/generalization_%j.out
-#SBATCH --error=logs/generalization_%j.err
+#SBATCH --output=logs/robx_sweep_%j.out
+#SBATCH --error=logs/robx_sweep_%j.err
 
 
-CONFIG_TO_USE="configs/configv2_generalization.yml"
+CONFIG_TO_USE="configs/configv2_robx_comp.yml"
 
 source /home/inf148179/anaconda3/bin/activate
 conda activate robustcf

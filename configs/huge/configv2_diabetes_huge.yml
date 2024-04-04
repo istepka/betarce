@@ -1,7 +1,7 @@
 general:
   data_path: data/
   model_path: models/
-  result_path: results/results_generalization/
+  result_path: results/results_diabetes_big/
   log_path: logs/
   random_state: 345
   random_seed: 345
@@ -12,24 +12,22 @@ general:
 experiments_setup:
   robust_cf_method: "betarob" # robx or betarob
   ex_types:
+    - "Architecture"
     - "Seed"
-    - "Architecture"
-    - "Seed-Architecture"
-    - "Seed-Bootstrap"
-    - "Architecture"
     - "Bootstrap"
-  perform_generalizations: True
+  perform_generalizations: False
   datasets:
-    - "wine_quality"
-    - "fico"
+    - "diabetes"
   beta_confidences:
     - 0.95
   delta_robustnesses:
+    - 0.5
+    - 0.6
     - 0.7
     - 0.8
     - 0.9
-  x_test_size: 20
-  m_count_per_experiment: 15
+  x_test_size: 30
+  m_count_per_experiment: 50
   cross_validation_folds: 3
   base_counterfactual_method: "gs" # - "dice"
   metrics_to_calculate:
@@ -49,9 +47,6 @@ model_hyperparameters:
         - 3
         - 4
       neurons_per_layer:
-        - 16
-        - 24
-        - 32
         - 48
         - 64
         - 80
@@ -72,7 +67,7 @@ model_hyperparameters:
       neurons_per_layer: 128
       activation: "relu"
       optimizer: "adam"
-    model_fixed_seed: 42
+    model_fixed_seed: 31
     model_base_hyperparameters:
       loss: "BCELoss"
       early_stopping: True
@@ -116,7 +111,6 @@ beta_rob:
     p_norm: 2
     step: 0.1
     target_proba: 0.5
-
 
 robx:
   taus:

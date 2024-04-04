@@ -1,7 +1,7 @@
 general:
   data_path: data/
   model_path: models/
-  result_path: results/results_generalization/
+  result_path: results/results_robx_comp/
   log_path: logs/
   random_state: 345
   random_seed: 345
@@ -10,26 +10,23 @@ general:
   save_every_n_iterations: 100
 
 experiments_setup:
-  robust_cf_method: "betarob" # robx or betarob
+  robust_cf_method: "robx" # robx or betarob
   ex_types:
-    - "Seed"
-    - "Architecture"
-    - "Seed-Architecture"
-    - "Seed-Bootstrap"
+    - "Bootstrap-Architecture"
     - "Architecture"
     - "Bootstrap"
-  perform_generalizations: True
+  perform_generalizations: False
   datasets:
-    - "wine_quality"
-    - "fico"
+    # - "fico"
+    # - "wine_quality"
+    - "breast_cancer"
+    - "diabetes"
   beta_confidences:
     - 0.95
   delta_robustnesses:
-    - 0.7
-    - 0.8
-    - 0.9
+    - 0.5
   x_test_size: 20
-  m_count_per_experiment: 15
+  m_count_per_experiment: 20
   cross_validation_folds: 3
   base_counterfactual_method: "gs" # - "dice"
   metrics_to_calculate:
@@ -117,10 +114,14 @@ beta_rob:
     step: 0.1
     target_proba: 0.5
 
-
 robx:
   taus:
+    - 0.4 
+    - 0.5
+    - 0.6
     - 0.7
+    - 0.8
   variances: 
     - 0.01
+    - 0.1
   N: 1000
