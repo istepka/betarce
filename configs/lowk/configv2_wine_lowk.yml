@@ -1,7 +1,7 @@
 general:
   data_path: data/
   model_path: models/
-  result_path: results/results_breast_lowk/
+  result_path: results/results_breast_wine/
   log_path: logs/
   random_state: 345
   random_seed: 345
@@ -17,7 +17,7 @@ experiments_setup:
     - "Seed"
   perform_generalizations: False
   datasets:
-    - "breast_cancer"
+    - "wine_quality"
   beta_confidences:
     - 0.9
   delta_robustnesses:
