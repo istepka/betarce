@@ -20,7 +20,7 @@ def array_to_tensor(X: Union[np.array, torch.Tensor, pd.DataFrame],
         
     return X.to(device)
 
-def bootstrap_data(X: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def bootstrap_data(X: np.ndarray, y: np.ndarray, seed = None) -> tuple[np.ndarray, np.ndarray]:
     '''
     Bootstrap the sample, i.e., sample with replacement from the original sample 
     
@@ -30,6 +30,10 @@ def bootstrap_data(X: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray
     Returns:
         - np.ndarray, the bootstrapped sample
     '''
+    
+    if seed is not None:
+        np.random.seed(seed)
+    
     range_indices = np.arange(len(X))
     size = len(X)
     indices = np.random.choice(range_indices, size=size, replace=True)

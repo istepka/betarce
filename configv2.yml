@@ -14,11 +14,11 @@ experiments_setup:
   ex_types:
     - "Architecture"
     - "Seed"
+    - "Bootstrap"
     # - "Bootstrap-Architecture"
     # - "Seed-Bootstrap"
     # - "Seed-Architecture"
     # - "Seed-Bootstrap-Architecture"
-    # - "Bootstrap"
   perform_generalizations: False
   datasets:
     - "fico"
@@ -44,33 +44,19 @@ experiments_setup:
     - "proximityL2"
     - "plausibility"
     - "dpow"
-  model_type_to_use:  "decision_tree" # - "random_forest" neural_network
+  model_type_to_use:  "neural_network" # - "random_forest" neural_network
   
-
 model_hyperparameters:
   neural_network:
     model_hyperparameters_pool:
       hidden_layers:
-        - 2
-        - 3
-        - 4
+        lower: 3
+        upper: 5
       neurons_per_layer:
-        - 16
-        - 24
-        - 32
-        - 48
-        - 64
-        - 80
-        - 96
-        - 112
-        - 128
-        - 144
-        - 192
-        - 224
-        - 256
+        lower: 32
+        upper: 256
       activation:
         - "relu"
-        - "tanh"
       optimizer:
         - "adam"
     model_fixed_hyperparameters:

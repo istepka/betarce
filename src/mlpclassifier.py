@@ -231,11 +231,9 @@ def train_K_mlps(X_train,
         y_train, 
         X_test, 
         y_test, 
-        hparams: dict, 
-        fixed_hparams: bool,
-        fixed_seed: int | None = None,
-        bootstrap: bool = True,
-        bootstrap_seed: int | None = None,
+        hparams_list: list[dict],
+        seeds: list[int],
+        bootstrap_seeds: list[int],
         K: int = 5, 
     ) -> dict:
     '''
@@ -248,8 +246,7 @@ def train_K_mlps(X_train,
     bootstrap: bool, whether to use bootstrapping
     bootstrap_seed: int | None, seed for bootstrapping
     '''
-    assert bootstrap_seed is not None or not bootstrap, 'If bootstrapping, a seed must be provided'
-    
+  
     # Set up the lists to store the results
     accuracies = []
     recalls = []
@@ -258,42 +255,28 @@ def train_K_mlps(X_train,
     models = []
     
     # Fixed hyperparameters
-    dropout = hparams['dropout']
-    epochs = hparams['epochs']
-    lr = hparams['lr']
-    batch_size = hparams['batch_size']
-    verbose = hparams['verbose']
-    early_stopping = hparams['early_stopping']
-    class_threshold = hparams['classification_threshold']
     
     # Train K models
     for k in range(K):
+        
+        seed = seeds[k]
+        bootstrap_seed = bootstrap_seeds[k]
+        hparams = hparams_list[k]
             
-        # Sample seed
-        if fixed_seed is not None:
-            seed = fixed_seed
-        else:
-            seed = np.random.randint(1, 100) + k + bootstrap_seed
-        
-        
-        # Bootstrap the data
-        if bootstrap:
-            np.random.seed(bootstrap_seed + k)    
-            X_train, y_train = bootstrap_data(X_train, y_train)
+        np.random.seed(bootstrap_seed)    
+        X_train, y_train = bootstrap_data(X_train, y_train)
 
-        # Sample hyperparameters
-        if not fixed_hparams:
-            np.random.seed(bootstrap_seed + k) 
-            # print(bootstrap_seed + k)
-            hidden_layers = np.random.choice(hparams['hidden_layers'])
-            activation = np.random.choice(hparams['activation'])
-            neurons_per_layer = np.random.choice(hparams['neurons_per_layer'])
-            optimizer = np.random.choice(hparams['optimizer'])
-        else:
-            hidden_layers = hparams['hidden_layers']
-            activation = hparams['activation']
-            neurons_per_layer = hparams['neurons_per_layer']
-            optimizer = hparams['optimizer']
+        hidden_layers = hparams['hidden_layers']
+        activation = hparams['activation']
+        neurons_per_layer = hparams['neurons_per_layer']
+        optimizer = hparams['optimizer']
+        dropout = hparams['dropout']
+        epochs = hparams['epochs']
+        lr = hparams['lr']
+        batch_size = hparams['batch_size']
+        verbose = hparams['verbose']
+        early_stopping = hparams['early_stopping']
+        class_threshold = hparams['classification_threshold']
             
         
         np.random.seed(seed)    
@@ -306,6 +289,8 @@ def train_K_mlps(X_train,
                             dropout=dropout, 
                             seed=seed
         )
+        
+        print(seed, bootstrap_seed, hparams)
         
         # Train the model
         mlp.fit(
@@ -346,37 +331,37 @@ def train_K_mlps(X_train,
         'f1s': f1s
     }
 
-def train_K_mlps_in_parallel(X_train, y_train, X_test, y_test, 
-                            hparams: dict,
-                            bootstrap: bool = True,
-                            fixed_hparams: bool = False,
-                            fixed_seed: int | None = None, 
-                            K: int = 20, 
+def train_K_mlps_in_parallel(X_train, 
+                            y_train, 
+                            X_test, 
+                            y_test, 
+                            hparamsB,
+                            bootstrapB,
+                            seedB, 
+                            hparams_base: dict,
+                            ex_type: str,
+                            K: int,
                             n_jobs: int = 4, 
     ) -> list[dict]:
-    '''
-    X_train: np.array, training data
-    y_train: np.array, training labels
-    X_test: np.array, test data
-    y_test: np.array, test labels
-    hparams: dict, hyperparameters
-    fixed_hparams: bool, whether to use fixed hyperparameters
-    fixed_seed: int | None, fixed seed
-    K: int, number of models to train
-    n_jobs: int, number of jobs
-    '''
     
     k_for_each_job = K // n_jobs 
-    print(f'Bootstrapping: {bootstrap}, Fixed hyperparameters: {fixed_hparams}, Fixed seed: {fixed_seed}, K: {K}, n_jobs: {n_jobs}')
+    # print(f'Bootstrapping: {bootstrap}, Fixed hyperparameters: {fixed_hparams}, Fixed seed: {fixed_seed}, K: {K}, n_jobs: {n_jobs}')
     
-    bootstrap_seed = 1234
+    # append the base hyperparameters
+    hparamsB = [hparams_base | h for h in hparamsB]
+    
+    partitioned_hparams = np.array_split(hparamsB, n_jobs)
+    partitioned_bootstrap = np.array_split(bootstrapB, n_jobs)
+    partitioned_seed = np.array_split(seedB, n_jobs)
+ 
     
     results = Parallel(n_jobs=n_jobs)(
         delayed(train_K_mlps)(X_train, y_train, X_test, y_test,
-            K=k_for_each_job, bootstrap=bootstrap, hparams=hparams,
-            fixed_hparams=fixed_hparams, fixed_seed=fixed_seed, 
-            bootstrap_seed=bootstrap_seed + i * k_for_each_job
-        ) for i in range(n_jobs)
+                                hparams_list=hparams,
+                                seeds=seeds,
+                                bootstrap_seeds=bootstrap_seeds,
+                                K=k_for_each_job
+            ) for hparams, seeds, bootstrap_seeds in zip(partitioned_hparams, partitioned_seed, partitioned_bootstrap)
     )
     return results
 
