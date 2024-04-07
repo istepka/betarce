@@ -386,7 +386,7 @@ def experiment(config: dict):
         all_iterations *= len(ex_types)
     
     if robust_cf_method == 'robx': # If robx is used, then the iterations are multiplied by the number of taus
-        all_iterations *= len(robx_taus)
+        all_iterations *= len(robx_taus) * len(robx_variances)
     
     if robust_cf_method == 'betarob': # If beta-robustness is used, then the iterations are multiplied by the number of beta_confidences and delta_robustnesses
         all_iterations *= len(beta_confidences) * len(delta_robustnesses)
