@@ -11,4 +11,4 @@ old_results/
 images/random
 
 *_local*
-logs/
+logs*/

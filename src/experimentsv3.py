@@ -633,6 +633,8 @@ def experiment(config: dict):
                                                 base_counterfatual_model2_pred_crisp = np.nan
                                         base_cf_record = {
                                             # Unique identifiers
+                                            'base_cf_method': base_cf_method,
+                                            'model_type_to_use': model_type_to_use,
                                             'experiment_type': ex_type,
                                             'dataset_name': dataset_name,
                                             'k_mlps_in_B': k_mlps_in_B,
