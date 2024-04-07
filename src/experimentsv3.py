@@ -527,7 +527,7 @@ def experiment(config: dict):
                             # add base hyperparameters to the list
                             hparams2_list = [model_base_hyperparameters | h for h in hparams2_list]
                         else:
-                            hparams2_list = [model_fixed_hparams] * m_count_per_experiment
+                            hparams2_list = [model_base_hyperparameters | model_fixed_hparams] * m_count_per_experiment
                             
                         if 'bootstrap' in ex_generalization.lower():
                             bootstrapM2 = sample_seeds(m_count_per_experiment)
