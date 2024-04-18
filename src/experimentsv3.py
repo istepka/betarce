@@ -65,32 +65,20 @@ def train_B(ex_type: str,
                 n_jobs=n_jobs,
             )
             models = [model for partial_results in results for model in partial_results['models']]
-        # case 'random_forest':
-        #     results = train_K_rfs_in_parallel(X_train=X_train,
-        #         y_train=y_train,
-        #         X_test=X_test,
-        #         y_test=y_test,
-        #         hparams=hparamsB,
-        #         bootstrap=bootstrapB,
-        #         fixed_hparams=fixed_hparams,
-        #         fixed_seed=seedB,
-        #         K=k_mlps_in_B,
-        #         n_jobs=n_jobs,
-        #     )
-        #     models = [model for partial_results in results for model in partial_results['models']]   
-        # case 'decision_tree':
-        #     results = train_K_dts_in_parallel(X_train=X_train,
-        #         y_train=y_train,
-        #         X_test=X_test,
-        #         y_test=y_test,
-        #         hparams=hparamsB,
-        #         bootstrap=bootstrapB,
-        #         fixed_hparams=fixed_hparams,
-        #         fixed_seed=seedB,
-        #         K=k_mlps_in_B,
-        #         n_jobs=n_jobs,
-        #     )
-        #     models = [model for partial_results in results for model in partial_results['models']]
+        case 'decision_tree':
+            results = train_K_dts_in_parallel(
+                X_train=X_train,
+                y_train=y_train,
+                X_test=X_test,
+                y_test=y_test,
+                hparamsB=hparamsB,
+                bootstrapB=bootstrapB,
+                seedB=seedB,
+                hparams_base=model_base_hyperparameters,
+                K=k_mlps_in_B,
+                n_jobs=n_jobs,
+            )
+            models = [model for partial_results in results for model in partial_results['models']]
         case _:
             raise ValueError('Unknown model type. Cannot train B models.')
         

@@ -21,6 +21,8 @@ class DecisionTree(BaseClassifier):
         self.min_samples_split = hparams['min_samples_split']
         self.min_samples_leaf = hparams['min_samples_leaf']
         self.criterion = hparams['criterion']
+        self.max_features = hparams['max_features']
+        self.random_state = seed
 
         np.random.seed(seed)
         
@@ -31,7 +33,9 @@ class DecisionTree(BaseClassifier):
             max_depth=self.max_depth,
             min_samples_split=self.min_samples_split,
             min_samples_leaf=self.min_samples_leaf,
-            criterion=self.criterion
+            criterion=self.criterion,
+            max_features=self.max_features,
+            random_state=self.random_state
         )
         
     def forward(self, x: np.ndarray) -> np.ndarray[float]:
@@ -116,24 +120,11 @@ def train_K_decision_trees(X_train,
         y_train, 
         X_test, 
         y_test, 
-        hparams: dict, 
-        fixed_hparams: bool,
-        fixed_seed: int | None = None,
-        bootstrap: bool = True,
-        bootstrap_seed: int | None = None,
+        hparams_list: list[dict],
+        seeds: list[int],
+        bootstrap_seeds: list[int],
         K: int = 5, 
     ) -> dict:
-    '''
-    X_train: np.array, training data
-    y_train: np.array, training labels
-    X_test: np.array, test data
-    y_test: np.array, test labels
-    hparams: dict, hyperparameters
-    K: int, number of models to train
-    bootstrap: bool, whether to use bootstrapping
-    bootstrap_seed: int | None, seed for bootstrapping
-    '''
-    assert bootstrap_seed is not None or not bootstrap, 'If bootstrapping, a seed must be provided'
     
     # Set up the lists to store the results
     accuracies = []
@@ -145,38 +136,16 @@ def train_K_decision_trees(X_train,
     # Train K models
     for k in range(K):
         
-        model_hparams = {}
-            
-        # Sample seed
-        if fixed_seed is not None:
-            seed = fixed_seed
-        else:
-            seed = np.random.randint(1, 100_000)
+        seed = seeds[k]
+        bootstrap_seed = bootstrap_seeds[k]
+        model_hparams = hparams_list[k]
+        
+        np.random.seed(bootstrap_seed)
+        X_train, y_train = bootstrap_data(X_train, y_train)
         
         
-        # Bootstrap the data
-        if bootstrap:
-            np.random.seed(bootstrap_seed + k)    
-            X_train, y_train = bootstrap_data(X_train, y_train)
-
-        # Sample hyperparameters
-        if not fixed_hparams:
-            np.random.seed(bootstrap_seed + k) 
-            model_hparams['max_depth'] = np.random.choice(hparams['max_depth'])
-            model_hparams['min_samples_split'] = np.random.choice(hparams['min_samples_split'])
-            model_hparams['min_samples_leaf'] = np.random.choice(hparams['min_samples_leaf'])
-            model_hparams['criterion'] = np.random.choice(hparams['criterion'])
-        else:
-            model_hparams['max_depth'] = hparams['max_depth']
-            model_hparams['min_samples_split'] = hparams['min_samples_split']
-            model_hparams['min_samples_leaf'] = hparams['min_samples_leaf']
-            model_hparams['criterion'] = hparams['criterion']
-            
-        model_hparams['seed'] = seed
         print(f'Model {k+1} hyperparameters: {model_hparams}')
-        
-        np.random.seed(seed)    
-            
+   
         dt = DecisionTree(model_hparams, seed)
         
         # Train the model
@@ -207,42 +176,37 @@ def train_K_decision_trees(X_train,
         'f1s': f1s
     }
 
-def train_K_dts_in_parallel(X_train, y_train, X_test, y_test, 
-                            hparams: dict,
-                            bootstrap: bool = True,
-                            fixed_hparams: bool = False,
-                            fixed_seed: int | None = None, 
-                            K: int = 20, 
+def train_K_dts_in_parallel(X_train, 
+                            y_train, 
+                            X_test, 
+                            y_test, 
+                            hparamsB,
+                            bootstrapB,
+                            seedB, 
+                            hparams_base: dict,
+                            K: int,
                             n_jobs: int = 4, 
     ) -> list[dict]:
-    '''
-    X_train: np.array, training data
-    y_train: np.array, training labels
-    X_test: np.array, test data
-    y_test: np.array, test labels
-    hparams: dict, hyperparameters
-    fixed_hparams: bool, whether to use fixed hyperparameters
-    fixed_seed: int | None, fixed seed
-    K: int, number of models to train
-    n_jobs: int, number of jobs
-    '''
     
     k_for_each_job = K // n_jobs 
-    print(f'Bootstrapping: {bootstrap}, Fixed hyperparameters: {fixed_hparams}, Fixed seed: {fixed_seed}, K: {K}, n_jobs: {n_jobs}')
     
-    bootstrap_seed = 1234
+    hparamsB = [hparams_base | hp for hp in hparamsB]
     
-    results = Parallel(n_jobs=n_jobs)(delayed(train_K_decision_trees)(
-        X_train, 
-        y_train, 
-        X_test, 
-        y_test, 
-        hparams, 
-        fixed_hparams,
-        fixed_seed,
-        bootstrap,
-        bootstrap_seed + i * k_for_each_job,
-        K=k_for_each_job,
-    ) for i in range(n_jobs))
+    partitioned_hparams = np.array_split(hparamsB, n_jobs)
+    partitioned_bootstrap = np.array_split(bootstrapB, n_jobs)
+    partitioned_seed = np.array_split(seedB, n_jobs)
+    
+    results = Parallel(n_jobs=n_jobs)(
+        delayed(train_K_decision_trees)(
+            X_train, 
+            y_train, 
+            X_test, 
+            y_test, 
+            hparams_list, 
+            seeds, 
+            bootstrap_seeds, 
+            k_for_each_job
+        ) for hparams_list, seeds, bootstrap_seeds in zip(partitioned_hparams, partitioned_seed, partitioned_bootstrap)
+    )
     
     return results

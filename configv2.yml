@@ -6,15 +6,15 @@ general:
   random_state: 345
   random_seed: 345
   logging_level: INFO
-  n_jobs: 4
+  n_jobs: 2
   save_every_n_iterations: 10
 
 experiments_setup:
   robust_cf_method: "betarob" # robx or betarob
   ex_types:
+    - "Architecture"
     - "Bootstrap"
     - "Seed"
-    - "Architecture"
     # - "Bootstrap-Architecture"
     # - "Seed-Bootstrap"
     # - "Seed-Architecture"
@@ -25,15 +25,11 @@ experiments_setup:
     # - "wine_quality"
     # - "breast_cancer"
   beta_confidences:
+    - 0.9
+  delta_robustnesses:
+    - 0.7
     # - 0.8
     # - 0.9
-    - 0.95
-  delta_robustnesses:
-    # - 0.5
-    # - 0.6
-    # - 0.7
-    # - 0.8
-    - 0.9
   x_test_size: 2
   m_count_per_experiment: 2
   cross_validation_folds: 3
@@ -44,7 +40,7 @@ experiments_setup:
     - "proximityL2"
     - "plausibility"
     - "dpow"
-  model_type_to_use:  "neural_network" # - "random_forest" neural_network
+  model_type_to_use:  "decision_tree" # - "random_forest" neural_network
   
 model_hyperparameters:
   neural_network:
@@ -75,72 +71,30 @@ model_hyperparameters:
       dropout: 0.4
       classification_threshold: 0.5  
 
-  random_forest:
-    model_hyperparameters_pool:
-      n_estimators:
-        - 8
-        - 12
-        - 16
-        - 20
-        - 24
-      max_depth:
-        - 4
-        - 6
-        - 8
-      min_samples_split:
-        - 2
-        - 3
-        - 4
-        - 5
-      min_samples_leaf:
-        - 1
-        - 2
-        - 3
-        - 4
-        - 5
-      criterion:
-        - "gini"
-        - "entropy"
-        - "log_loss"
-    model_fixed_hyperparameters:
-      n_estimators: 50
-      max_depth: 10
-      min_samples_split: 2
-      min_samples_leaf: 1
-    model_fixed_seed: 42
-    model_base_hyperparameters:
-      criterion: "gini"
-      verbose: 0
-      n_jobs: 1
-      seed: 42
-      classification_threshold: 0.5
   decision_tree:
     model_hyperparameters_pool:
       max_depth:
-        - 4
-        - 6
-        - 8
-        - 10
+        lower: 5
+        upper: 10
       min_samples_split:
-        - 2
-        - 3
-        - 4
-        - 5
+        lower: 2
+        upper: 5
       min_samples_leaf:
-        - 1
-        - 2
-        - 3
-        - 4
-        - 5
+        lower: 1
+        upper: 4
       criterion:
         - "gini"
         - "entropy"
         - "log_loss"
+      max_features:
+        - "sqrt"
+        - "log2"
     model_fixed_hyperparameters:
-      max_depth: 10
+      max_depth: 8
       min_samples_split: 2
       min_samples_leaf: 1
       criterion: "gini"
+      max_features: "sqrt"
     model_fixed_seed: 42
     model_base_hyperparameters:
       criterion: "gini"
