@@ -18,6 +18,9 @@ experiments_setup:
   perform_generalizations: False
   datasets:
     - "wine_quality"
+    - "fico"
+    - "diabetes"
+    - "breast_cancer"
   beta_confidences:
     - 0.95
   delta_robustnesses:
@@ -128,7 +131,9 @@ beta_rob:
 
 robx:
   taus:
-    - 0.7
+    - 0.6
+    - 0.5
   variances: 
     - 0.01
+    - 0.1
   N: 1000
