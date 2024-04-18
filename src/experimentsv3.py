@@ -12,6 +12,7 @@ from create_data_examples import Dataset, DatasetPreprocessor
 from mlpclassifier import MLPClassifier, train_neural_network, train_K_mlps_in_parallel
 from rfclassifier import RFClassifier, train_random_forest, train_K_rfs_in_parallel
 from dtclassifier import DecisionTree, train_decision_tree, train_K_dts_in_parallel
+from lgbmclassifier import LGBMClassifier, train_lgbm, train_K_LGBMS_in_parallel
 from baseclassifier import BaseClassifier
 from explainers import DiceExplainer, GrowingSpheresExplainer, BaseExplainer
 from robx import robx_algorithm
@@ -30,6 +31,8 @@ def train_model(X_train, y_train, model_type: str, seed: int, hparams: dict) -> 
         m, pp, pc = train_random_forest(X_train, y_train, seed, hparams)
     elif model_type == 'decision_tree':
         m, pp, pc = train_decision_tree(X_train, y_train, seed, hparams)
+    elif model_type == 'lightgbm':
+        m, pp, pc = train_lgbm(X_train, y_train, seed, hparams)
     else:
         raise ValueError(f"Unknown model type: {model_type}")
     
@@ -79,6 +82,20 @@ def train_B(ex_type: str,
                 n_jobs=n_jobs,
             )
             models = [model for partial_results in results for model in partial_results['models']]
+        case 'lightgbm':
+            results = train_K_LGBMS_in_parallel(
+                X_train=X_train,
+                y_train=y_train,
+                X_test=X_test,
+                y_test=y_test,
+                hparamsB=hparamsB,
+                bootstrapB=bootstrapB,
+                seedB=seedB,
+                hparams_base=model_base_hyperparameters,
+                K=k_mlps_in_B,
+                n_jobs=n_jobs,
+            )
+            models = [model for partial_results in results for model in partial_results['models']]    
         case _:
             raise ValueError('Unknown model type. Cannot train B models.')
         
@@ -293,7 +310,16 @@ def sample_architectures(n: int, hparams: dict) -> list[dict]:
             elif isinstance(_options, dict):
                 lower = _options['lower']
                 upper = _options['upper']
-                architecture[_param] = np.random.randint(lower, upper + 1)
+                # Check if the lower and upper are integers
+                if isinstance(lower, int) and isinstance(upper, int):
+                    lower = int(lower)
+                    upper = int(upper)
+                    architecture[_param] = np.random.randint(lower, upper + 1)
+                # Otherwise, they are floats
+                else:
+                    freq = _options['freq']
+                    lower, upper, freq = float(lower), float(upper), int(freq)
+                    architecture[_param] = np.random.uniform(lower, upper, freq)
             else:
                 raise ValueError('Unknown hyperparameter type', _options, 'for', _param)
         architectures.append(architecture)

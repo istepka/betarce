@@ -25,11 +25,11 @@ experiments_setup:
     # - "wine_quality"
     # - "breast_cancer"
   beta_confidences:
-    - 0.9
+    - 0.95
   delta_robustnesses:
-    - 0.7
+    # - 0.7
     # - 0.8
-    # - 0.9
+    - 0.9
   x_test_size: 2
   m_count_per_experiment: 2
   cross_validation_folds: 3
@@ -40,7 +40,7 @@ experiments_setup:
     - "proximityL2"
     - "plausibility"
     - "dpow"
-  model_type_to_use:  "decision_tree" # - "random_forest" neural_network
+  model_type_to_use:  "lightgbm" # - "random_forest" neural_network
   
 model_hyperparameters:
   neural_network:
@@ -102,6 +102,35 @@ model_hyperparameters:
       n_jobs: 1
       seed: 42
       classification_threshold: 0.5
+
+  lightgbm:
+    model_hyperparameters_pool:
+      num_leaves:
+        lower: 10
+        upper: 20
+      n_estimators:
+        lower: 15
+        upper: 40
+      min_child_samples:
+        lower: 10
+        upper: 20
+      subsample:
+        lower: 0.5
+        upper: 1
+        freq: 0.1
+    model_base_hyperparameters:
+      objective: "binary"
+      verbose: -1
+      seed: 42
+      classification_threshold: 0.5
+      n_jobs: 4
+    model_fixed_hyperparameters:
+      num_leaves: 15
+      n_estimators: 30
+      min_child_samples: 20
+      subsample: 0.8
+    model_fixed_seed: 42
+      
 
 beta_rob:
   k_mlps_in_B: 
