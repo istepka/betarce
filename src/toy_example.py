@@ -26,7 +26,7 @@ fig, ax = plt.subplots(1, 1, figsize=(6, 3))
 palette = sns.color_palette("rocket_r", len(counterfactuals))
 
 for i, cf in enumerate(counterfactuals):
-    plt.scatter(cf[0], cf[1], label=f"\u0394-RCE: {deltas[i]}", marker='o', s=100, color=palette[i], alpha=1)
+    plt.scatter(cf[0], cf[1], label=f"delta: {deltas[i]}", marker='o', s=100, color=palette[i], alpha=1)
     
 plt.scatter(original[0], original[1], label='Original x', color='green', marker='^', s=100, alpha=1)
 plt.scatter(base[0], base[1], label='Base CFE', color='green', marker='s', s=100, alpha=1)
