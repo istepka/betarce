@@ -3,7 +3,6 @@
 *.key
 wandb/
 
-models/
 results/
 results*/
 old_results/

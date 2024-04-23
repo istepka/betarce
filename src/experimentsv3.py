@@ -8,18 +8,19 @@ import os
 import logging
 import pandas as pd
 
-from create_data_examples import Dataset, DatasetPreprocessor
-from mlpclassifier import MLPClassifier, train_neural_network, train_K_mlps_in_parallel
-from rfclassifier import RFClassifier, train_random_forest, train_K_rfs_in_parallel
-from dtclassifier import DecisionTree, train_decision_tree, train_K_dts_in_parallel
-from lgbmclassifier import LGBMClassifier, train_lgbm, train_K_LGBMS_in_parallel
-from baseclassifier import BaseClassifier
+from helpers.data_handler import Dataset, DatasetPreprocessor
+from models.mlpclassifier import MLPClassifier, train_neural_network, train_K_mlps_in_parallel
+from models.rfclassifier import RFClassifier, train_random_forest, train_K_rfs_in_parallel
+from models.dtclassifier import DecisionTree, train_decision_tree, train_K_dts_in_parallel
+from models.lgbmclassifier import LGBMClassifier, train_lgbm, train_K_LGBMS_in_parallel
+from models.baseclassifier import BaseClassifier
+from models.utils import bootstrap_data
+
 from explainers import DiceExplainer, GrowingSpheresExplainer, BaseExplainer
 from robx import robx_algorithm
-from utils import bootstrap_data
-from betarob import BetaRob
+from betarce import BetaRCE
 
-def get_config(path: str = './configv2.yml') -> dict:
+def get_config(path: str = './config.yml') -> dict:
     with open(path, 'r') as file:
         config = yaml.safe_load(file)
     return config
@@ -195,7 +196,7 @@ def robust_counterfactual_generate(
         seed: int,
     ) -> tuple[np.ndarray, dict]:
     
-    beta_explainer = BetaRob(
+    beta_explainer = BetaRCE(
         dataset=dataset,
         preprocessor=preprocessor,
         pred_fn_crisp=pred_fn_crisp,
@@ -402,7 +403,7 @@ def experiment(config: dict):
     if robust_cf_method == 'robx': # If robx is used, then the iterations are multiplied by the number of taus
         all_iterations *= len(robx_taus) * len(robx_variances)
     
-    if robust_cf_method == 'betarob': # If beta-robustness is used, then the iterations are multiplied by the number of beta_confidences and delta_robustnesses
+    if robust_cf_method == 'BetaRCE': # If beta-robustness is used, then the iterations are multiplied by the number of beta_confidences and delta_robustnesses
         all_iterations *= len(beta_confidences) * len(delta_robustnesses)
         
     tqdm_pbar = tqdm(total=all_iterations, desc="Overall progress")
@@ -686,7 +687,7 @@ def experiment(config: dict):
                                         if (achievable or not achievable and robust_cf_method == 'robx') and not isNone:
                                             t0 = time.time()
                                             match robust_cf_method:
-                                                case 'betarob':
+                                                case 'BetaRCE':
                                                     robust_counterfactual, artifact_dict = robust_counterfactual_generate(
                                                         start_instance=base_cf,
                                                         target_class=taget_class,

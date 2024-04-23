@@ -1,46 +1,140 @@
 general:
   data_path: data/
   model_path: models/
-  result_path: results_bench/
+  result_path: results_localtesting/
   log_path: logs/
   random_state: 345
+  random_seed: 345
   logging_level: INFO
+  n_jobs: 2
+  save_every_n_iterations: 10
 
-mlp-sklearn:
-  hidden_layer_sizes: [100, 100, 100]
-  activation: relu
-  solver: adam
-  learning_rate_init: 0.01
-  max_iter: 1000
-  verbose: true
-  early_stopping: true
-
-rf-sklearn:
-  n_estimators: 100
-  max_depth: 10
-
-mlp-torch:
-  hidden_dims: [100, 100, 100]
-  activation: relu
-  lr: 0.001
-  dropout: 0.2
-  max_iter: 1000
-  epochs: 100
-  batch_size: 128
-  verbose: true
-  early_stopping: true
-
+experiments_setup:
+  robust_cf_method: "robx" # robx or betarob
+  ex_types:
+    - "Architecture"
+    - "Seed"
+    - "Bootstrap"
+    # - "Bootstrap-Architecture"
+    # - "Seed-Bootstrap"
+    # - "Seed-Architecture"
+    # - "Seed-Bootstrap-Architecture"
+  perform_generalizations: False
+  datasets:
+    - "fico"
+    # - "wine_quality"
+    # - "breast_cancer"
+  beta_confidences:
+    - 0.95
+  delta_robustnesses:
+    # - 0.7
+    # - 0.8
+    - 0.9
+  x_test_size: 2
+  m_count_per_experiment: 2
+  cross_validation_folds: 3
+  base_counterfactual_method: "gs" # - "dice"
+  metrics_to_calculate:
+    - "validity"
+    - "proximityL1"
+    - "proximityL2"
+    - "plausibility"
+    - "dpow"
+  model_type_to_use:  "lightgbm" # - "random_forest" neural_network
   
-robXHparams:
-  tau: 0.7
-  variance: 0.01
-  N: 1000
+model_hyperparameters:
+  neural_network:
+    model_hyperparameters_pool:
+      hidden_layers:
+        lower: 3
+        upper: 5
+      neurons_per_layer:
+        lower: 32
+        upper: 256
+      activation:
+        - "relu"
+      optimizer:
+        - "adam"
+    model_fixed_hyperparameters:
+      hidden_layers: 3
+      neurons_per_layer: 128
+      activation: "relu"
+      optimizer: "adam"
+    model_fixed_seed: 42
+    model_base_hyperparameters:
+      loss: "BCELoss"
+      early_stopping: True
+      lr: 0.001
+      epochs: 100
+      batch_size: 128
+      verbose: True
+      dropout: 0.4
+      classification_threshold: 0.5  
 
-statrobHparams:
-  k_mlps: 16
-  method: GS
-  beta_confidence: 0.9
-  beta_estim_method: 'MLE'
+  decision_tree:
+    model_hyperparameters_pool:
+      max_depth:
+        lower: 5
+        upper: 10
+      min_samples_split:
+        lower: 2
+        upper: 5
+      min_samples_leaf:
+        lower: 1
+        upper: 4
+      criterion:
+        - "gini"
+        - "entropy"
+        - "log_loss"
+      max_features:
+        - "sqrt"
+        - "log2"
+    model_fixed_hyperparameters:
+      max_depth: 8
+      min_samples_split: 2
+      min_samples_leaf: 1
+      criterion: "gini"
+      max_features: "sqrt"
+    model_fixed_seed: 42
+    model_base_hyperparameters:
+      criterion: "gini"
+      verbose: 0
+      n_jobs: 1
+      seed: 42
+      classification_threshold: 0.5
+
+  lightgbm:
+    model_hyperparameters_pool:
+      num_leaves:
+        lower: 10
+        upper: 20
+      n_estimators:
+        lower: 15
+        upper: 40
+      min_child_samples:
+        lower: 10
+        upper: 20
+      subsample:
+        lower: 0.5
+        upper: 1
+        freq: 0.1
+    model_base_hyperparameters:
+      objective: "binary"
+      verbose: -1
+      seed: 42
+      classification_threshold: 0.5
+      n_jobs: 4
+    model_fixed_hyperparameters:
+      num_leaves: 15
+      n_estimators: 30
+      min_child_samples: 20
+      subsample: 0.8
+    model_fixed_seed: 42
+      
+
+beta_rob:
+  k_mlps_in_B: 
+    - 32
   growingSpheresHparams:
     max_iter: 100
     n_search_samples: 100
@@ -48,10 +142,13 @@ statrobHparams:
     step: 0.1
     target_proba: 0.5
 
-experiment:
-  classification_threshold: 0.5
-  wandb_enabled: false 
-  wandb_project: "statrob"
-  wandb_file: "wandb.key"
-  experiment_name: "statrob"
-  
+robx:
+  taus:
+    - 0.4 
+    - 0.5
+    - 0.6
+    - 0.7
+    - 0.8
+  variances: 
+    - 0.01
+  N: 1000

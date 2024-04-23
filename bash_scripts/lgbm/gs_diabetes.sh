@@ -8,8 +8,8 @@
 #SBATCH --output=logs_v4/output_%j.out
 #SBATCH --error=logs_v4/error_%j.err
 
-source /home/inf148179/anaconda3/bin/activate
-conda activate robustcf
+source $USER_CONDA_ACT
+conda activate $ENV_NAME
 
 echo "Running experiments"
 python ./src/experimentsv3.py --config configs/lgbm/gs_diabetes.yml 

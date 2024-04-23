@@ -1,7 +1,7 @@
 general:
   data_path: data/
   model_path: models/
-  result_path: results_v3/robx_nn_gs_breast/
+  result_path: results_v3/robx/robx_nn_gs_breast/
   log_path: logs_v3/
   random_state: 345
   random_seed: 345

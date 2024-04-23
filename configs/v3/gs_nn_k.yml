@@ -1,7 +1,7 @@
 general:
   data_path: data/
   model_path: models/
-  result_path: results_v3/gs_k/
+  result_path: results_v3/k/gs_k/
   log_path: logs_v3/
   random_state: 345
   random_seed: 345

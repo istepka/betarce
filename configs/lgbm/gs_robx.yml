@@ -1,7 +1,7 @@
 general:
   data_path: data/
   model_path: models/
-  result_path: results_lgbm/gs_wine/
+  result_path: results_lgbm/robx/gs_wine/
   log_path: logs_lgbm/
   random_state: 123
   random_seed: 123
