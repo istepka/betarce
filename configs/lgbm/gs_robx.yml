@@ -10,7 +10,7 @@ general:
   save_every_n_iterations: 100
 
 experiments_setup:
-  robust_cf_method: "betarob" # robx or betarob
+  robust_cf_method: "robx" # robx or betarob
   ex_types:
     - "Architecture"
     - "Bootstrap"

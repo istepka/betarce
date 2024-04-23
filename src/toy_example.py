@@ -17,9 +17,9 @@ for i in range(5, 20, 2):
 
 
 original = [0.0, 0.0]
-base = [0.3, 0.52]
-counterfactuals = [[0.2, 0.63], [0.3, 0.7], [0.45, 0.7], [0.5, 0.8], [0.72, 0.84]]
-deltas = [0.5, 0.6, 0.7, 0.8, 0.9]
+base = [0.5, 0.4]
+counterfactuals = [[0.45, 0.5], [0.5, 0.6], [0.59, 0.65], [0.69, 0.67]]#, [0.3, 0.7], [0.45, 0.7], [0.5, 0.8], [0.72, 0.84]]
+deltas = [0.6, 0.7, 0.8, 0.9]
 
 fig, ax = plt.subplots(1, 1, figsize=(6, 3))
 
@@ -28,8 +28,8 @@ palette = sns.color_palette("rocket_r", len(counterfactuals))
 for i, cf in enumerate(counterfactuals):
     plt.scatter(cf[0], cf[1], label=f"delta: {deltas[i]}", marker='o', s=100, color=palette[i], alpha=1)
     
-plt.scatter(original[0], original[1], label='Original x', color='green', marker='^', s=100, alpha=1)
-plt.scatter(base[0], base[1], label='Base CFE', color='green', marker='s', s=100, alpha=1)
+plt.scatter(original[0], original[1], label='original x', color='green', marker='^', s=100, alpha=1)
+plt.scatter(base[0], base[1], label='base CFE', color='green', marker='s', s=100, alpha=1)
 
 plt.plot([original[0], base[0]], [original[1], base[1]], color='green', linestyle='--', alpha=0.6)
 
@@ -62,7 +62,7 @@ plt.contourf(xx, yy, Z, alpha=0.2, cmap='RdYlBu')
 plt.xlim(-0.5, 1.8)
 plt.ylim(-0.5, 1.8)
 
-plt.legend(ncols=4, fontsize=7, bbox_to_anchor=(0.82, 0.97))
+plt.legend(ncols=3, fontsize=8, bbox_to_anchor=(0.85, 0.94), labelspacing=1)
 
 # Turn off the grid, ticks, and lines
 plt.grid(False)
@@ -74,6 +74,6 @@ plt.yticks([])
 for spine in plt.gca().spines.values():
     spine.set_visible(False)
 
-plt.savefig('images/paper/thumbnail.png', dpi=300, bbox_inches='tight')
+plt.savefig('images/paper/thumbnail.png', dpi=300, bbox_inches='tight', pad_inches=0)
 plt.show()
 
