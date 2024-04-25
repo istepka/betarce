@@ -49,7 +49,7 @@ if __name__ == '__main__':
     
     # Process the results
     paths = {
-        # 'results_lgbm': ['main', 'robx'],
+        'results_lgbm': ['main', 'robx'],
         'results_v3': ['main', 'robx', 'confidence', 'k', 'generalization']
     }
     

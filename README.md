@@ -21,8 +21,8 @@ Directory structure:
         `configs`  
         `images`  
         `data`   
-        `src`   
         config.yml  
+        `src`   
         ├── `explainers`  
         ├── `helpers`  
         ├── `models`  
