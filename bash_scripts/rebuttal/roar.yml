@@ -1,10 +1,10 @@
 general:
   data_path: data/
   model_path: models/
-  result_path: results/results_diabetes2/
-  log_path: logs/
-  random_state: 345
-  random_seed: 345
+  result_path: /workspace/results/roar/
+  log_path: /workspace/logs/
+  random_state: 123
+  random_seed: 123
   logging_level: INFO
   n_jobs: 4
   save_every_n_iterations: 100
@@ -12,28 +12,23 @@ general:
 experiments_setup:
   robust_cf_method: "betarob" # robx or betarob
   ex_types:
-    # - "Bootstrap-Architecture"
-    # - "Seed-Bootstrap"
-    - "Seed-Architecture"
-    - "Seed-Bootstrap-Architecture"
-    # - "Architecture"
-    # - "Seed"
-    # - "Bootstrap"
+    - "Architecture"
+    - "Bootstrap"
+    - "Seed"
   perform_generalizations: False
   datasets:
     - "diabetes"
+    - "fico"
+    - "breast_cancer"
+    - "wine_quality"
   beta_confidences:
     - 0.95
   delta_robustnesses:
-    - 0.5
-    - 0.6
-    - 0.7
-    - 0.8
     - 0.9
-  x_test_size: 30
-  m_count_per_experiment: 30
+  x_test_size: 50
+  m_count_per_experiment: 50
   cross_validation_folds: 3
-  base_counterfactual_method: "gs" # - "dice"
+  base_counterfactual_method: "roar" # - "dice"
   metrics_to_calculate:
     - "validity"
     - "proximityL1"
@@ -41,32 +36,20 @@ experiments_setup:
     - "plausibility"
     - "dpow"
   model_type_to_use:  "neural_network" # - "random_forest"
+  just_base_cf: True
   
 
 model_hyperparameters:
   neural_network:
     model_hyperparameters_pool:
       hidden_layers:
-        - 2
-        - 3
-        - 4
+        lower: 3
+        upper: 5
       neurons_per_layer:
-        - 16
-        - 24
-        - 32
-        - 48
-        - 64
-        - 80
-        - 96
-        - 112
-        - 128
-        - 144
-        - 192
-        - 224
-        - 256
+        lower: 64
+        upper: 256
       activation:
         - "relu"
-        - "tanh"
       optimizer:
         - "adam"
     model_fixed_hyperparameters:
