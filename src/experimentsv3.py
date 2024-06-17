@@ -14,7 +14,7 @@ from rfclassifier import RFClassifier, train_random_forest, train_K_rfs_in_paral
 from dtclassifier import DecisionTree, train_decision_tree, train_K_dts_in_parallel
 from lgbmclassifier import LGBMClassifier, train_lgbm, train_K_LGBMS_in_parallel
 from baseclassifier import BaseClassifier
-from explainers import DiceExplainer, GrowingSpheresExplainer, BaseExplainer, CarlaExplainer
+from explainers import DiceExplainer, GrowingSpheresExplainer, BaseExplainer, CarlaExplainer, RBRExplainer
 from robx import robx_algorithm
 from utils import bootstrap_data
 from betarob import BetaRob
@@ -175,6 +175,12 @@ def prepare_base_counterfactual_explainer(
                 columns_order_ohe=X_train.columns.tolist(),
             )
             explainer.prep(method_to_use=base_cf_method)
+        case 'rbr':
+            explainer = RBRExplainer(
+                X_train.copy(),
+                model
+            )
+            explainer.prep()
         case _:
             raise ValueError('base_cf_method name not recognized. Make sure to set it in config')
         
@@ -191,6 +197,8 @@ def base_counterfactual_generate(
     elif isinstance(base_explainer, GrowingSpheresExplainer):
         return base_explainer.generate(instance)
     elif isinstance(base_explainer, CarlaExplainer):
+        return base_explainer.generate(instance)
+    elif isinstance(base_explainer, RBRExplainer):
         return base_explainer.generate(instance)
     else:
         raise ValueError('base_explainer must be either a DiceExplainer or a GrowingSpheresExplainer')
@@ -803,7 +811,7 @@ def experiment(config: dict):
                                         # Save the results every n iterations            
                                         if global_iteration % save_every_n_iterations == 0 and global_iteration > 0:
                                             # results_df.to_feather(f'./{results_df_dir}/{global_iteration}_results.feather')
-                                            results_df.to_csv(f'./{results_df_dir}/{global_iteration}_results.csv')
+                                            results_df.to_csv(f'{results_df_dir}/{global_iteration}_results.csv')
                                             cols = results_df.columns
                                             
                                             # Clear the results_df to save memory and speed up the process
@@ -817,7 +825,7 @@ def experiment(config: dict):
         
     # Final save                       
     # results_df.to_feather(f'./{results_df_dir}/{global_iteration}_results.feather')
-    results_df.to_csv(f'./{results_df_dir}/{global_iteration}_results.csv')
+    results_df.to_csv(f'{results_df_dir}/{global_iteration}_results.csv')
     # results_df = pd.DataFrame(columns=results_df.columns)
     
     # Final miscellaneous save
