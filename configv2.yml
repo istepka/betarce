@@ -1,7 +1,7 @@
 general:
   data_path: data/
   model_path: models/
-  result_path: results_localtesting/
+  result_path: results_carla/
   log_path: logs/
   random_state: 345
   random_seed: 345
@@ -10,37 +10,32 @@ general:
   save_every_n_iterations: 10
 
 experiments_setup:
-  robust_cf_method: "robx" # robx or betarob
+  robust_cf_method: "betarob" # robx or betarob
   ex_types:
     - "Architecture"
     - "Seed"
     - "Bootstrap"
-    # - "Bootstrap-Architecture"
-    # - "Seed-Bootstrap"
-    # - "Seed-Architecture"
-    # - "Seed-Bootstrap-Architecture"
   perform_generalizations: False
   datasets:
     - "fico"
     # - "wine_quality"
     # - "breast_cancer"
   beta_confidences:
-    - 0.95
+    - 0.5
   delta_robustnesses:
-    # - 0.7
-    # - 0.8
-    - 0.9
-  x_test_size: 2
+    - 0.5
+  x_test_size: 5
   m_count_per_experiment: 2
   cross_validation_folds: 3
-  base_counterfactual_method: "gs" # - "dice"
+  base_counterfactual_method: "face" # - "dice"
   metrics_to_calculate:
     - "validity"
     - "proximityL1"
     - "proximityL2"
     - "plausibility"
     - "dpow"
-  model_type_to_use:  "lightgbm" # - "random_forest" neural_network
+  model_type_to_use:  "neural_network" # - "random_forest" neural_network
+  just_base_cf: True
   
 model_hyperparameters:
   neural_network:
@@ -134,7 +129,7 @@ model_hyperparameters:
 
 beta_rob:
   k_mlps_in_B: 
-    - 32
+    - 4
   growingSpheresHparams:
     max_iter: 100
     n_search_samples: 100

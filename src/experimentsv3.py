@@ -14,7 +14,7 @@ from rfclassifier import RFClassifier, train_random_forest, train_K_rfs_in_paral
 from dtclassifier import DecisionTree, train_decision_tree, train_K_dts_in_parallel
 from lgbmclassifier import LGBMClassifier, train_lgbm, train_K_LGBMS_in_parallel
 from baseclassifier import BaseClassifier
-from explainers import DiceExplainer, GrowingSpheresExplainer, BaseExplainer
+from explainers import DiceExplainer, GrowingSpheresExplainer, BaseExplainer, CarlaExplainer
 from robx import robx_algorithm
 from utils import bootstrap_data
 from betarob import BetaRob
@@ -162,8 +162,21 @@ def prepare_base_counterfactual_explainer(
                 step=hparams['step']
             )    
             explainer.prep()
+        case 'face':
+            X_train_w_target = X_train.copy()
+            X_train_w_target[dataset_preprocessor.target_column] = y_train
+            explainer = CarlaExplainer(
+                train_dataset=X_train_w_target,
+                explained_model=model,
+                continous_columns=dataset_preprocessor.continuous_columns,
+                categorical_columns=dataset_preprocessor.categorical_columns,
+                target_feature_name=dataset_preprocessor.target_column,
+                nonactionable_columns=[],
+                columns_order_ohe=X_train.columns.tolist(),
+            )
+            explainer.prep(method_to_use='face')
         case _:
-            raise ValueError('base_cf_method must be either "dice" or "gs"')
+            raise ValueError('base_cf_method name not recognized. Make sure to set it in config')
         
     return explainer
 
@@ -176,6 +189,8 @@ def base_counterfactual_generate(
     if isinstance(base_explainer, DiceExplainer):
         return base_explainer.generate(instance, **kwargs)
     elif isinstance(base_explainer, GrowingSpheresExplainer):
+        return base_explainer.generate(instance)
+    elif isinstance(base_explainer, CarlaExplainer):
         return base_explainer.generate(instance)
     else:
         raise ValueError('base_explainer must be either a DiceExplainer or a GrowingSpheresExplainer')
@@ -331,8 +346,6 @@ def sample_seeds(n: int) -> list[int]:
     '''
     seeds = np.random.choice(1000, n, replace=False)
     return seeds
-
-
           
 def experiment(config: dict):
     
@@ -372,6 +385,7 @@ def experiment(config: dict):
     model_type_to_use = EXPERIMENTS_SETUP['model_type_to_use']
     base_cf_method = EXPERIMENTS_SETUP['base_counterfactual_method']
     perform_generalizations = EXPERIMENTS_SETUP['perform_generalizations']
+    just_base_cf = EXPERIMENTS_SETUP['just_base_cf']
     
     # Extract the beta-robustness parameters
     k_mlps_in_B_options = BETA_ROB['k_mlps_in_B']
@@ -399,11 +413,12 @@ def experiment(config: dict):
     if perform_generalizations: # If generalizations are performed, then multiply the iterations by the number of generalizations
         all_iterations *= len(ex_types)
     
-    if robust_cf_method == 'robx': # If robx is used, then the iterations are multiplied by the number of taus
-        all_iterations *= len(robx_taus) * len(robx_variances)
-    
-    if robust_cf_method == 'betarob': # If beta-robustness is used, then the iterations are multiplied by the number of beta_confidences and delta_robustnesses
-        all_iterations *= len(beta_confidences) * len(delta_robustnesses)
+    if not just_base_cf:
+        if robust_cf_method == 'robx': # If robx is used, then the iterations are multiplied by the number of taus
+            all_iterations *= len(robx_taus) * len(robx_variances)
+        
+        if robust_cf_method == 'betarob': # If beta-robustness is used, then the iterations are multiplied by the number of beta_confidences and delta_robustnesses
+            all_iterations *= len(beta_confidences) * len(delta_robustnesses)
         
     tqdm_pbar = tqdm(total=all_iterations, desc="Overall progress")
     
@@ -601,6 +616,8 @@ def experiment(config: dict):
                                 base_explainer=base_explainer,
                                 instance=x_test_sample_pd,
                             )
+                            if check_is_none(base_cf):
+                                base_cf = None
                             time_base_cf = time.time() - t0
                                 
                             # Calculate metrics
@@ -613,27 +630,33 @@ def experiment(config: dict):
                                 predict_fn_crisp=pred_crisp1,
                             )
                             
+                            
+                            
                             # This flag is just so that we insert the base counterfactual data only once in the results_df
                             first_flag = True
                             
+                            if just_base_cf:
+                                _beta_confidences = [0.5]
+                                _delta_robustnesses = [0.5]
+                                model2_handles_to_use = [model2_handles[0]]
                             # If robx is used, then the beta_confidence and delta_robustness are not used so we set them to NaN
-                            if robust_cf_method == 'robx':
+                            elif robust_cf_method == 'robx':
                                 _beta_confidences = robx_taus # use the taus for robx, but to simplify the code, we just assign it to beta_confidences variable
                                 _delta_robustnesses =  robx_variances # use the variances for robx, but to simplify the code, we just assign it to delta_robustnesses variable
+                                model2_handles_to_use = model2_handles.copy()
                             else: # otherwise, use the given values in config
                                 _beta_confidences = beta_confidences
                                 _delta_robustnesses = delta_robustnesses
+                                model2_handles_to_use = model2_handles.copy()
                             
                             # Loop over the beta_confidence and delta_robustness values and the M_2 models
                             for beta_confidence in _beta_confidences:
                                 for delta_robustness in _delta_robustnesses:
-                                    for model2_name, model2, pred_proba2, pred_crisp2 in model2_handles:
-                                        
-                                        
+                                    for model2_name, model2, pred_proba2, pred_crisp2 in model2_handles_to_use:
                                         # Start from calculating the validity of the base counterfactual  
                                         # Do this only once as it is the same for all M_2 models and all beta_confidence and delta_robustness         
                                         if first_flag:
-                                            if not check_is_none(base_cf):
+                                            if not check_is_none(base_cf) and not just_base_cf:
                                                 base_cf_validity_model2 = int(int(pred_crisp2(base_cf)[0]) == taget_class)
                                                 base_counterfatual_model1_pred_proba = pred_proba1(base_cf)
                                                 base_counterfatual_model1_pred_crisp = pred_crisp1(base_cf)
@@ -645,6 +668,7 @@ def experiment(config: dict):
                                                 base_counterfatual_model1_pred_crisp = np.nan
                                                 base_counterfatual_model2_pred_proba = np.nan
                                                 base_counterfatual_model2_pred_crisp = np.nan
+
                                         base_cf_record = {
                                             # Unique identifiers
                                             'base_cf_method': base_cf_method,
@@ -679,11 +703,12 @@ def experiment(config: dict):
                                             'base_counterfactual_time': time_base_cf,
                                         }
                                         
+                                        
                                         # Obtain the robust counterfactual
                                         # Check if the robustness is achievable and if the base counterfactual is not None
                                         achievable = is_robustness_achievable_for_params(k_mlps_in_B, beta_confidence, delta_robustness)
                                         isNone = check_is_none(base_cf)
-                                        if (achievable or not achievable and robust_cf_method == 'robx') and not isNone:
+                                        if (achievable or not achievable and robust_cf_method == 'robx') and not isNone and not just_base_cf:
                                             t0 = time.time()
                                             match robust_cf_method:
                                                 case 'betarob':
@@ -777,7 +802,8 @@ def experiment(config: dict):
                             
                                         # Save the results every n iterations            
                                         if global_iteration % save_every_n_iterations == 0 and global_iteration > 0:
-                                            results_df.to_feather(f'./{results_df_dir}/{global_iteration}_results.feather')
+                                            # results_df.to_feather(f'./{results_df_dir}/{global_iteration}_results.feather')
+                                            results_df.to_csv(f'./{results_df_dir}/{global_iteration}_results.csv')
                                             cols = results_df.columns
                                             
                                             # Clear the results_df to save memory and speed up the process
@@ -790,11 +816,12 @@ def experiment(config: dict):
                                     first_flag = False
         
     # Final save                       
-    results_df.to_feather(f'./{results_df_dir}/{global_iteration}_results.feather')
+    # results_df.to_feather(f'./{results_df_dir}/{global_iteration}_results.feather')
+    results_df.to_csv(f'./{results_df_dir}/{global_iteration}_results.csv')
     # results_df = pd.DataFrame(columns=results_df.columns)
     
     # Final miscellaneous save
-    miscellaneous_df.to_feather(f'./{miscellaneous_df_dir}/{global_iteration}_miscellaneous.feather')
+    # miscellaneous_df.to_feather(f'./{miscellaneous_df_dir}/{global_iteration}_miscellaneous.feather')
     # miscellaneous_df = pd.DataFrame(columns=miscellaneous_df.columns)
     
     # Progress bar close
