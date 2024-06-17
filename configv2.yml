@@ -24,10 +24,10 @@ experiments_setup:
     - 0.5
   delta_robustnesses:
     - 0.5
-  x_test_size: 5
-  m_count_per_experiment: 2
+  x_test_size: 10
+  m_count_per_experiment: 4
   cross_validation_folds: 3
-  base_counterfactual_method: "face" # - "dice"
+  base_counterfactual_method: "clue" # - "dice"
   metrics_to_calculate:
     - "validity"
     - "proximityL1"

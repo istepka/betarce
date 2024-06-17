@@ -9,7 +9,7 @@ from torch import nn
 import numpy as np
 
 from .CARLA import carla
-from .CARLA.carla.recourse_methods import Face
+from .CARLA.carla.recourse_methods import Face, Revise, Roar
 from .CARLA.carla.data.catalog import CsvCatalog
 from typing import Dict, List
 from .CARLA.carla import MLModel
@@ -25,6 +25,7 @@ class TorchModel(MLModel):
         self._mymodel = model#self.__load_model()
 
         self.columns_order = columns_ohe_order
+        self.model_type = 'ann'
     
     def __call__(self, data):
         return self._mymodel(data)
@@ -65,8 +66,6 @@ class TorchModel(MLModel):
         ret[:, 0] = 1 - ret[:, 1]
         return ret
 
-
-
 class CarlaExplainer(BaseExplainer):
 
     def __init__(self, train_dataset: pd.DataFrame, 
@@ -97,27 +96,64 @@ class CarlaExplainer(BaseExplainer):
         Prepare the explainer.
         '''
         self.method_to_use = method_to_use
+        
+        match self.method_to_use:
+            case 'face': 
+                fraction = 0.5
+                face_hyperparams = {
+                    'mode': 'knn',
+                    'fraction': fraction,
+                }
+                self.face_explainer = Face(self.model, face_hyperparams)
+            case 'clue':
+                # hyperparams = {
+                #     "data_name": "clue_vae",
+                #     "train_vae": True,
+                #     "width": 128,
+                #     "depth": 3,
+                #     "latent_dim": 16,
+                #     "batch_size": 32,
+                #     "epochs": 50,
+                #     "lr": 0.001,
+                #     "early_stop": 5,
+                # }
+                # self.clue_explainer = Clue(data=self.data_catalog, mlmodel=self.model, hyperparams=hyperparams)
+                hyperparams = {
+                    "data_name": "revise_vae",
+                    "vae_params": {
+                        "layers": [23, 128],
+                        "train": True,
+                        "lambda_reg": 0.1,
+                        "batch_size": 32,
+                        "epochs": 50,
+                        "lr": 0.01,
+                    }
+                }
+                
+                self.clue_explainer = Revise(self.model, self.data_catalog, hyperparams)
+                
+            case 'roar':
+                hyperparams = {
+                    'seed': 123,
+                    'lime_seed': 123,
+                }
+                self.roar_explainer = Roar(self.model, hyperparams)
+            case _:
+                raise ValueError(f"Method {self.method_to_use} not supported by the explainer")
 
     def generate(self, query_instance: pd.DataFrame) -> np.ndarray:
         if isinstance(query_instance, pd.DataFrame):
             query_instance = query_instance.copy()
-
-
-        if self.method_to_use == 'face':
-            # Dynamically select fraction to prevent FACE from throwing errors because of the too small neighbourhood
-            fraction = 0.5
-            # if self.data_catalog.df_train.shape[0] * 0.05 < 50:
-            #     if self.data_catalog.df_train.shape[0] * 0.1 < 50:
-            #         fraction = 0.2
-            #     else:
-            #         fraction = 0.1
             
-            face_hyperparams = {
-                'mode': 'knn',
-                'fraction': fraction,
-            }
-            self.face_explainer = Face(self.model, face_hyperparams)
-            face_cf = self.face_explainer.get_counterfactuals(query_instance)
-            return face_cf.to_numpy()
-        else:
-            raise ValueError(f"Method {self.method_to_use} not supported by the explainer")
+        match self.method_to_use:
+            case 'face': 
+                face_cf = self.face_explainer.get_counterfactuals(query_instance)
+                return face_cf.to_numpy()
+            case 'clue':
+                clue_cf = self.clue_explainer.get_counterfactuals(query_instance)
+                return clue_cf.to_numpy()
+            case 'roar':
+                roar_cf = self.roar_explainer.get_counterfactuals(query_instance)
+                return roar_cf.to_numpy()
+            case _:
+                raise ValueError(f"Method {self.method_to_use} not supported by the explainer")

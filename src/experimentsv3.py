@@ -162,7 +162,7 @@ def prepare_base_counterfactual_explainer(
                 step=hparams['step']
             )    
             explainer.prep()
-        case 'face':
+        case 'face' | 'roar' | 'clue':
             X_train_w_target = X_train.copy()
             X_train_w_target[dataset_preprocessor.target_column] = y_train
             explainer = CarlaExplainer(
@@ -174,7 +174,7 @@ def prepare_base_counterfactual_explainer(
                 nonactionable_columns=[],
                 columns_order_ohe=X_train.columns.tolist(),
             )
-            explainer.prep(method_to_use='face')
+            explainer.prep(method_to_use=base_cf_method)
         case _:
             raise ValueError('base_cf_method name not recognized. Make sure to set it in config')
         
@@ -656,7 +656,7 @@ def experiment(config: dict):
                                         # Start from calculating the validity of the base counterfactual  
                                         # Do this only once as it is the same for all M_2 models and all beta_confidence and delta_robustness         
                                         if first_flag:
-                                            if not check_is_none(base_cf) and not just_base_cf:
+                                            if not check_is_none(base_cf):
                                                 base_cf_validity_model2 = int(int(pred_crisp2(base_cf)[0]) == taget_class)
                                                 base_counterfatual_model1_pred_proba = pred_proba1(base_cf)
                                                 base_counterfatual_model1_pred_crisp = pred_crisp1(base_cf)
