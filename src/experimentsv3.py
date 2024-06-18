@@ -646,21 +646,21 @@ def experiment(config: dict):
                             if just_base_cf:
                                 _beta_confidences = [0.5]
                                 _delta_robustnesses = [0.5]
-                                model2_handles_to_use = [model2_handles[0]]
+                                # model2_handles_to_use = [model2_handles[0]]
                             # If robx is used, then the beta_confidence and delta_robustness are not used so we set them to NaN
                             elif robust_cf_method == 'robx':
                                 _beta_confidences = robx_taus # use the taus for robx, but to simplify the code, we just assign it to beta_confidences variable
                                 _delta_robustnesses =  robx_variances # use the variances for robx, but to simplify the code, we just assign it to delta_robustnesses variable
-                                model2_handles_to_use = model2_handles.copy()
+                                # model2_handles_to_use = model2_handles.copy()
                             else: # otherwise, use the given values in config
                                 _beta_confidences = beta_confidences
                                 _delta_robustnesses = delta_robustnesses
-                                model2_handles_to_use = model2_handles.copy()
+                                # model2_handles_to_use = model2_handles.copy()
                             
                             # Loop over the beta_confidence and delta_robustness values and the M_2 models
                             for beta_confidence in _beta_confidences:
                                 for delta_robustness in _delta_robustnesses:
-                                    for model2_name, model2, pred_proba2, pred_crisp2 in model2_handles_to_use:
+                                    for model2_name, model2, pred_proba2, pred_crisp2 in model2_handles:
                                         # Start from calculating the validity of the base counterfactual  
                                         # Do this only once as it is the same for all M_2 models and all beta_confidence and delta_robustness         
                                         if first_flag:

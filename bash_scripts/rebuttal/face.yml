@@ -1,7 +1,7 @@
 general:
   data_path: data/
   model_path: models/
-  result_path: /workspace/results/gs_face/
+  result_path: /workspace/results/face/
   log_path: /workspace/logs/
   random_state: 123
   random_seed: 123
@@ -19,14 +19,14 @@ experiments_setup:
   datasets:
     - "diabetes"
     - "fico"
-    - "breast_cancer"
-    - "wine_quality"
+    # - "breast_cancer"
+    # - "wine_quality"
   beta_confidences:
     - 0.95
   delta_robustnesses:
     - 0.9
-  x_test_size: 50
-  m_count_per_experiment: 50
+  x_test_size: 20
+  m_count_per_experiment: 45
   cross_validation_folds: 3
   base_counterfactual_method: "face" # - "dice"
   metrics_to_calculate:

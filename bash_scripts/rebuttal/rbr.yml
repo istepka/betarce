@@ -19,14 +19,14 @@ experiments_setup:
   datasets:
     - "diabetes"
     - "fico"
-    - "breast_cancer"
-    - "wine_quality"
+    # - "breast_cancer"
+    # - "wine_quality"
   beta_confidences:
     - 0.95
   delta_robustnesses:
     - 0.9
-  x_test_size: 50
-  m_count_per_experiment: 50
+  x_test_size: 20
+  m_count_per_experiment: 45
   cross_validation_folds: 3
   base_counterfactual_method: "rbr" # - "dice"
   metrics_to_calculate:
