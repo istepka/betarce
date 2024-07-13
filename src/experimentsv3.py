@@ -683,6 +683,7 @@ def experiment(config: dict):
                                             'model_type_to_use': model_type_to_use,
                                             'experiment_type': ex_type,
                                             'dataset_name': dataset_name,
+                                            'just_base_cf': just_base_cf,
                                             'k_mlps_in_B': k_mlps_in_B,
                                             'fold_i': fold_i,
                                             'experiment_generalization_type': ex_generalization,
