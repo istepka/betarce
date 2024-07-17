@@ -1,8 +1,8 @@
 general:
   data_path: data/
-  model_path: /home/scratch/istepka/betaRCE/models/
-  result_path: /home/scratch/istepka/betaRCE/results_aaai/dice/diabetes/
-  log_path: /home/scratch/istepka/betaRCE/logs_aaai/
+  model_path: /home/inf148179/robust-cf/aaai_experiments/models/
+  result_path: /home/inf148179/robust-cf/aaai_experiments/results_aaai/dice/diabetes/
+  log_path: /home/inf148179/robust-cf/aaai_experiments/logs_aaai/
   random_state: 345
   random_seed: 345
   logging_level: INFO

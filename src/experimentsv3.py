@@ -620,12 +620,17 @@ def experiment(config: dict):
                             
                             # Obtain the base counterfactual
                             t0 = time.time()
-                            base_cf = base_counterfactual_generate(
-                                base_explainer=base_explainer,
-                                instance=x_test_sample_pd,
-                            )
-                            if check_is_none(base_cf):
+                            try:
+                                base_cf = base_counterfactual_generate(
+                                    base_explainer=base_explainer,
+                                    instance=x_test_sample_pd,
+                                )
+                                if check_is_none(base_cf):
+                                    base_cf = None
+                            except:
                                 base_cf = None
+                                logging.warning('BASE CF NOT FOUND')
+                                
                             time_base_cf = time.time() - t0
                                 
                             # Calculate metrics
