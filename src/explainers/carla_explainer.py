@@ -91,19 +91,23 @@ class CarlaExplainer(BaseExplainer):
         self.model = TorchModel(model=explained_model, data=self.data_catalog, columns_ohe_order=columns_order_ohe)
 
 
-    def prep(self, method_to_use: str) -> None:
+    def prep(self, method_to_use: str, hparams: dict = {}) -> None:
         '''
         Prepare the explainer.
         '''
         self.method_to_use = method_to_use
         
         match self.method_to_use:
-            case 'face': 
-                fraction = 0.5
+            case 'face':
                 face_hyperparams = {
                     'mode': 'knn',
-                    'fraction': fraction,
+                    'fraction': 0.5,
                 }
+                if 'fraction' in hparams:
+                    face_hyperparams['fraction'] = hparams['fraction']
+                if 'mode' in hparams:
+                    face_hyperparams['mode'] = hparams['mode']
+                    
                 self.face_explainer = Face(self.model, face_hyperparams)
             case 'clue':
                 # hyperparams = {
@@ -136,6 +140,7 @@ class CarlaExplainer(BaseExplainer):
                 hyperparams = {
                     'seed': 123,
                     'lime_seed': 123,
+                    **hparams
                 }
                 self.roar_explainer = Roar(self.model, hyperparams)
             case _:

@@ -34,70 +34,30 @@ class RBRExplainer(BaseExplainer):
         self.model = model_wrap
         self.train_data = train_dataset.to_numpy()
     
-    def prep(self) -> None:
+    def prep(self, hparams: dict = None) -> None:
         '''
         Prepare the explainer.
         '''
-        # RBR CONFIG
-        self.config = {
-            "rbr_params": {
-                "delta_plus": 0.2,
-                "sigma": 1.0,
-                "epsilon_op": 0.0,
-                "epsilon_pe": 0.0,
-            },
-            "ec": {
-                "num_samples": 100,
-                "max_distance": 1.0,
-                "rbr_params": {
-                    "delta_plus": 0.2,
-                    "sigma": 1.0,
-                    "epsilon_op": 0.0,
-                    "epsilon_pe": 0.0,
+        if hparams is not None:
+            self.config = {
+                "ec": {
+                    "num_samples": 100,
+                    "max_distance": 1.0,
+                    "rbr_params": {
+                        "delta_plus": 0.2,
+                        "sigma": 1.0,
+                        "epsilon_op": 0.0,
+                        "epsilon_pe": 0.0,
+                    },
                 },
-            },
-            "perturb_radius": {
-                "synthesis": 0.2,
-                "german": 0.2,
-                "sba": 0.2,
-                "gmc": 0.2,
-            },
-            "params_to_vary": {
-                "delta_max": {
-                    "default": 0.05,
-                    "min": 0.0,
-                    "max": 0.2,
-                    "step": 0.02,
+                "perturb_radius": {
+                    "synthesis": 0.2,
                 },
-                "epsilon_op": {
-                    "default": 1.5,
-                    "min": 0.0,
-                    "max": 1.0,
-                    "step": 0.5,
-                },
-                "epsilon_pe": {
-                    "default": 1.5,
-                    "min": 0.0,
-                    "max": 1.0,
-                    "step": 0.5,
-                },
-                "delta_plus": {
-                    "default": 0.05,
-                    "min": 0.0,
-                    "max": 1.0,
-                    "step": 0.2,
-                },
-                "none": {"min": 0.0, "max": 0.0, "step": 0.1},
-            },
-            "kfold": 5,
-            "num_future": 100,
-            "perturb_std": 1.0,
-            "num_samples": 200,
-            "max_ins": 100,
-            "max_distance": 1.0,
-            "train_data": self.train_data,
-            "device": "cuda",
-        }
+                "device": "cpu",
+            }
+        else:
+            self.config = hparams
+
 
     def generate(self, query_instance: pd.DataFrame) -> np.ndarray:
         '''

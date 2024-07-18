@@ -32,6 +32,7 @@ class DiceExplainer(BaseExplainer):
     def prep(self, 
              dice_method: str = 'kdtree',
              feature_encoding: str | None = None,
+             hparams: dict = {},
         ) -> None:
         '''
         Prepare the DiCE explainer.
@@ -57,6 +58,9 @@ class DiceExplainer(BaseExplainer):
         self.dice_exp = dice_ml.Dice(dice_data, dice_model, method=dice_method)
         
         self.prep_done = True
+        
+        if hparams:
+            self.hp = hparams
              
         
     def generate(self, 
@@ -67,6 +71,7 @@ class DiceExplainer(BaseExplainer):
             diversity_weight: float = 0.05,
             classification_threshold: float = 0.5,
             random_seed: int = 123,
+            sparsity_weight: float = 0.05,
         ) -> pd.DataFrame:
         '''
         Generate counterfactuals using DiCE.
@@ -84,6 +89,14 @@ class DiceExplainer(BaseExplainer):
         if not self.prep_done:
             raise ValueError('prep() method must be called first')
         
+        if 'sparsity_weight' in self.hp:
+            sparsity_weight = self.hp['sparsity_weight']
+        if 'proximity_weight' in self.hp:
+            proximity_weight = self.hp['proximity_weight']
+        if 'diversity_weight' in self.hp:
+            diversity_weight = self.hp['diversity_weight']    
+        
+        
         explanations_object = self.dice_exp.generate_counterfactuals(
             query_instances=query_instance,
             total_CFs=total_CFs,
@@ -91,7 +104,7 @@ class DiceExplainer(BaseExplainer):
             proximity_weight=proximity_weight,
             diversity_weight=diversity_weight,
             stopping_threshold=classification_threshold,
-            sparsity_weight=0.05,
+            sparsity_weight=sparsity_weight,
             random_seed=random_seed,
             )
         
