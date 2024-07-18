@@ -419,7 +419,7 @@ def experiment(config: dict):
     all_iterations = len(ex_types) * len(datasets) * cv_folds * m_count_per_experiment  * x_test_size * len(k_mlps_in_B_options)
     
     if perform_generalizations: # If generalizations are performed, then multiply the iterations by the number of generalizations
-        all_iterations *= len(ex_types)
+        all_iterations *= 3 # TODO: Make it dynamic
     
     if not just_base_cf:
         if robust_cf_method == 'robx': # If robx is used, then the iterations are multiplied by the number of taus
@@ -550,7 +550,7 @@ def experiment(config: dict):
                     if not perform_generalizations:
                         ex_types_for_generatilaztion = [ex_type]
                     else:
-                        ex_types_for_generatilaztion = ex_types
+                        ex_types_for_generatilaztion = ['Architecture', 'Seed', 'Bootstrap']
        
                     # Run the experiments for the generalization types
                     for ex_generalization in ex_types_for_generatilaztion:
@@ -627,6 +627,10 @@ def experiment(config: dict):
                                 )
                                 if check_is_none(base_cf):
                                     base_cf = None
+                                    
+                                if base_cf is not None:
+                                    # Make sure it is flat
+                                    base_cf = base_cf.flatten()   
                             except:
                                 base_cf = None
                                 logging.warning('BASE CF NOT FOUND')

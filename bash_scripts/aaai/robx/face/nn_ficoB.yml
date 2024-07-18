@@ -1,7 +1,7 @@
 general:
   data_path: data/
   model_path: /home/inf148179/robust-cf/aaai_experiments/models/
-  result_path: /home/inf148179/robust-cf/aaai_experiments/results_aaai/face/wine_quality/
+  result_path: /home/inf148179/robust-cf/aaai_experiments/results_aaai/robx/face/ficoB/
   log_path: /home/inf148179/robust-cf/aaai_experiments/logs_aaai/
   random_state: 345
   random_seed: 345
@@ -10,14 +10,14 @@ general:
   save_every_n_iterations: 100
 
 experiments_setup:
-  robust_cf_method: "betarob" # robx or betarob
+  robust_cf_method: "robx" # robx or betarob
   ex_types:
-    - "Architecture"
+    # - "Architecture"
     - "Bootstrap"
-    - "Seed"
-  perform_generalizations: True
+    # - "Seed"
+  perform_generalizations: False
   datasets:
-    - "wine_quality"
+    - "fico"
   beta_confidences:
     - 0.95
   delta_robustnesses:

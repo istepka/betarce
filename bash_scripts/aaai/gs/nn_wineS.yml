@@ -1,10 +1,10 @@
 general:
   data_path: data/
-  model_path: /home/inf148179/robust-cf/aaai_experiments/models/
-  result_path: /home/inf148179/robust-cf/aaai_experiments/results_aaai/base/roar/
-  log_path: /home/inf148179/robust-cf/aaai_experiments/logs_aaai/base/
-  random_state: 123
-  random_seed: 123
+  model_path: /home/inf148179/robust-cf/models/
+  result_path: /home/inf148179/robust-cf/aaai_experiments/results_aaai/gs/wine_qualityS/
+  log_path: /home/inf148179/robust-cf/aaai_experiments/logs_aaai/
+  random_state: 345
+  random_seed: 345
   logging_level: INFO
   n_jobs: 4
   save_every_n_iterations: 100
@@ -12,14 +12,11 @@ general:
 experiments_setup:
   robust_cf_method: "betarob" # robx or betarob
   ex_types:
-    - "Architecture"
-    - "Bootstrap"
+    # - "Architecture"
+    # - "Bootstrap"
     - "Seed"
-  perform_generalizations: False
+  perform_generalizations: True
   datasets:
-    - "diabetes"
-    - "fico"
-    - "breast_cancer"
     - "wine_quality"
   beta_confidences:
     - 0.95
@@ -30,7 +27,7 @@ experiments_setup:
   x_test_size: 30
   m_count_per_experiment: 30
   cross_validation_folds: 3
-  base_counterfactual_method: "roar" # - "dice"
+  base_counterfactual_method: "gs" # - "dice"
   metrics_to_calculate:
     - "validity"
     - "proximityL1"
@@ -38,7 +35,7 @@ experiments_setup:
     - "plausibility"
     - "dpow"
   model_type_to_use:  "neural_network" # - "random_forest"
-  just_base_cf: True
+  just_base_cf: False
   
 
 model_hyperparameters:
@@ -104,47 +101,9 @@ beta_rob:
     step: 0.1
     target_proba: 0.5
 
-gs:
-  max_iter: 100
-  n_search_samples: 100
-  p_norm: 2
-  step: 0.1
-  target_proba: 0.5
-
 robx:
   taus:
-    - 0.4 
-    - 0.5
-    - 0.6
     - 0.7
-    - 0.8
   variances: 
     - 0.01
   N: 1000
-
-roar:
-  delta_max: [0.01, 0.05, 0.1]
-  lr: [0.01, 0.05, 0.1]
-  norm: [1, 2]
-
-rbr: 
-  ec:
-    num_samples: 100
-    max_distance: 1.0
-    rbr_params: 
-        delta_plus: [0.0, 0.1, 0.2]
-        sigma: [0.5, 1.0, 1.5]
-        epsilon_op: 0.0
-        epsilon_pe: 0.0
-  perturb_radius:
-      synthesis: [0.1, 0.2, 0.3]
-  device: "cpu"
-
-face:
-  mode: ['knn', 'epsilon']
-  fraction: [0.1, 0.3, 0.5]
-
-dice: 
-  proximity_weight: [0.05, 0.1, 0.2]
-  diversity_weight: [0.05, 0.1, 0.2]
-  sparsity_weight: [0.05, 0.1, 0.2]

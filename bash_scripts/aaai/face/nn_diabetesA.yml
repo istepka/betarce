@@ -1,7 +1,7 @@
 general:
   data_path: data/
   model_path: /home/inf148179/robust-cf/aaai_experiments/models/
-  result_path: /home/inf148179/robust-cf/aaai_experiments/results_aaai/dice/fico/
+  result_path: /home/inf148179/robust-cf/aaai_experiments/results_aaai/face/diabetesA/
   log_path: /home/inf148179/robust-cf/aaai_experiments/logs_aaai/
   random_state: 345
   random_seed: 345
@@ -13,11 +13,11 @@ experiments_setup:
   robust_cf_method: "betarob" # robx or betarob
   ex_types:
     - "Architecture"
-    - "Bootstrap"
-    - "Seed"
+    # - "Bootstrap"
+    # - "Seed"
   perform_generalizations: True
   datasets:
-    - "fico"
+    - "diabetes"
   beta_confidences:
     - 0.95
   delta_robustnesses:
@@ -27,7 +27,7 @@ experiments_setup:
   x_test_size: 30
   m_count_per_experiment: 30
   cross_validation_folds: 3
-  base_counterfactual_method: "dice" # - "dice"
+  base_counterfactual_method: "face" # - "dice"
   metrics_to_calculate:
     - "validity"
     - "proximityL1"

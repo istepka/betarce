@@ -1,7 +1,7 @@
 general:
   data_path: data/
   model_path: /home/inf148179/robust-cf/aaai_experiments/models/
-  result_path: /home/inf148179/robust-cf/aaai_experiments/results_aaai/face/fico/
+  result_path: /home/inf148179/robust-cf/aaai_experiments/results_aaai/face/breast_cancerB/
   log_path: /home/inf148179/robust-cf/aaai_experiments/logs_aaai/
   random_state: 345
   random_seed: 345
@@ -12,12 +12,12 @@ general:
 experiments_setup:
   robust_cf_method: "betarob" # robx or betarob
   ex_types:
-    - "Architecture"
+    # - "Architecture"
     - "Bootstrap"
-    - "Seed"
+    # - "Seed"
   perform_generalizations: True
   datasets:
-    - "fico"
+    - "breast_cancer"
   beta_confidences:
     - 0.95
   delta_robustnesses:
