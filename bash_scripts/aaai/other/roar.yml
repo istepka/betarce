@@ -1,8 +1,8 @@
 general:
   data_path: data/
   model_path: /home/inf148179/robust-cf/aaai_experiments/models/
-  result_path: /home/inf148179/robust-cf/aaai_experiments/results_aaai/roar/
-  log_path: /home/inf148179/robust-cf/aaai_experiments/logs_aaai/
+  result_path: /home/inf148179/robust-cf/aaai_experiments/results_aaai/base/roar/
+  log_path: /home/inf148179/robust-cf/aaai_experiments/logs_aaai/base/
   random_state: 123
   random_seed: 123
   logging_level: INFO
