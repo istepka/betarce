@@ -30,7 +30,7 @@ class DiceExplainer(BaseExplainer):
         self.prep_done = False
         
     def prep(self, 
-             dice_method: str = 'kdtree',
+             dice_method: str = 'random',
              feature_encoding: str | None = None,
              hparams: dict = {},
         ) -> None:
@@ -59,8 +59,7 @@ class DiceExplainer(BaseExplainer):
         
         self.prep_done = True
         
-        if hparams:
-            self.hp = hparams
+        self.hp = hparams
              
         
     def generate(self, 
@@ -95,7 +94,6 @@ class DiceExplainer(BaseExplainer):
             proximity_weight = self.hp['proximity_weight']
         if 'diversity_weight' in self.hp:
             diversity_weight = self.hp['diversity_weight']    
-        
         
         explanations_object = self.dice_exp.generate_counterfactuals(
             query_instances=query_instance,
