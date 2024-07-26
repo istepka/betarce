@@ -2,9 +2,17 @@
 .vscode/
 *.key
 wandb/
+slurm_*
+
+aaai_experiments/
+bash_scripts/aaai/*
 
 models/
 results/
 results*/
+old_results/
 
 images/random
+
+*_local*
+logs*/
