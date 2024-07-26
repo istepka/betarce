@@ -366,11 +366,9 @@ def experiment(config: dict):
     # Extract the results directory
     results_dir = GENERAL['result_path']
     results_df_dir = os.path.join(results_dir, 'results')
-    miscellaneous_df_dir = os.path.join(results_dir, 'miscellaneous')
     
     os.makedirs(results_dir, exist_ok=True)
     os.makedirs(results_df_dir, exist_ok=True)
-    os.makedirs(miscellaneous_df_dir, exist_ok=True)
     
     # Save the config right away
     with open(os.path.join(results_dir, 'config.yml'), 'w') as file:
@@ -476,7 +474,6 @@ def experiment(config: dict):
         raise ValueError('Unknown base counterfactual method')
    
     results_df = pd.DataFrame()
-    miscellaneous_df = pd.DataFrame()
     
     global_iteration = 0
     all_iterations = len(ex_types) * len(datasets) * cv_folds * m_count_per_experiment  * x_test_size * len(k_mlps_in_B_options) * len(all_combinations)
@@ -562,27 +559,6 @@ def experiment(config: dict):
                         modelsB_crisp_fns = [model.predict_crisp for model in modelsB]
                         logging.info(f"Finished training B in {time_modelsB} seconds")
                                                         
-                        # Add miscellaneous data to the frame
-                        record = {
-                            'experiment_type': ex_type,
-                            'dataset_name': dataset_name,
-                            'k_mlps_in_B': k_mlps_in_B,
-                            'fold_i': fold_i,
-                            'model1_time': time_model1,
-                            'modelsB_time': time_modelsB,
-                        }
-                        record = pd.DataFrame(record, index=[0])
-                        miscellaneous_df = pd.concat([miscellaneous_df, record], ignore_index=True)
-                        
-                        # Save the miscellaneous data
-                        if len(miscellaneous_df) >= save_every_n_iterations:
-                            path = os.path.join(miscellaneous_df_dir, f'miscellaneous_df_{global_iteration}.feather')
-                            miscellaneous_df.to_feather(path)
-                            
-                            # Preserve memory
-                            cols = miscellaneous_df.columns
-                            del miscellaneous_df
-                            miscellaneous_df = pd.DataFrame(cols=cols)
                         
                         # Prepare Base Counterfactual Explainer
                         base_explainer = prepare_base_counterfactual_explainer(
@@ -807,20 +783,11 @@ def experiment(config: dict):
     results_df.to_csv(f'{results_df_dir}/{global_iteration}_results.csv')
     # results_df = pd.DataFrame(columns=results_df.columns)
     
-    # Final miscellaneous save
-    # miscellaneous_df.to_feather(f'./{miscellaneous_df_dir}/{global_iteration}_miscellaneous.feather')
-    # miscellaneous_df = pd.DataFrame(columns=miscellaneous_df.columns)
-    
     # Progress bar close
     tqdm_pbar.close()
-    
-    # Save the miscellaneous data
     logging.info("Finished all experiments")
                 
    
-                
-
-
 if __name__ == "__main__":
     
     import argparse
