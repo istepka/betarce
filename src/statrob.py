@@ -1,20 +1,19 @@
-from sklearn.model_selection import train_test_split
+import os
+import scipy
+import warnings
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import os
 import numpy as np
-from typing import Union
-import pandas as pd
-from joblib import Parallel, delayed
-import scipy
-import warnings
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 import seaborn as sns
-from sklearn.neighbors import NearestNeighbors
 import matplotlib.pyplot as plt
+import pandas as pd
+from typing import Union
+from joblib import Parallel, delayed
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
-from create_data_examples import DatasetPreprocessor, Dataset
+from utils.create_data_examples import DatasetPreprocessor, Dataset
 from explainers import growing_spheres_search, GrowingSpheresExplainer
 
 # Scipy screams some radom stuff

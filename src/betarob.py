@@ -6,9 +6,7 @@ import logging
 from scipy import stats
 
 from explainers import BaseExplainer, GrowingSpheresExplainer
-from mlpclassifier import MLPClassifier
-from utils import array_to_tensor
-from create_data_examples import Dataset, DatasetPreprocessor
+from utils.create_data_examples import Dataset, DatasetPreprocessor
 
 
 def prepare_growing_spheres(preprocessor: DatasetPreprocessor,

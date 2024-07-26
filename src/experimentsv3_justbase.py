@@ -1,26 +1,26 @@
+import os
 import time
+import yaml
+import logging
+import pandas as pd
 import numpy as np
-from sklearn.neighbors import NearestNeighbors
 from tqdm import tqdm
 from scipy import stats
-import yaml
-import os
-import logging
-from copy import deepcopy
-import pandas as pd
+from sklearn.neighbors import NearestNeighbors
 
-from create_data_examples import Dataset, DatasetPreprocessor
-from mlpclassifier import MLPClassifier, train_neural_network, train_K_mlps_in_parallel
-from rfclassifier import RFClassifier, train_random_forest, train_K_rfs_in_parallel
-from dtclassifier import DecisionTree, train_decision_tree, train_K_dts_in_parallel
-from lgbmclassifier import LGBMClassifier, train_lgbm, train_K_LGBMS_in_parallel
-from baseclassifier import BaseClassifier
+# Project imports
+from utils.create_data_examples import Dataset, DatasetPreprocessor
+from classifiers.mlpclassifier import MLPClassifier, train_neural_network, train_K_mlps_in_parallel
+from classifiers.rfclassifier import RFClassifier, train_random_forest, train_K_rfs_in_parallel
+from classifiers.dtclassifier import DecisionTree, train_decision_tree, train_K_dts_in_parallel
+from classifiers.lgbmclassifier import LGBMClassifier, train_lgbm, train_K_LGBMS_in_parallel
+from classifiers.baseclassifier import BaseClassifier
+from classifiers.utils import bootstrap_data
 from explainers import DiceExplainer, GrowingSpheresExplainer, BaseExplainer, CarlaExplainer, RBRExplainer
 from robx import robx_algorithm
-from utils import bootstrap_data
 from betarob import BetaRob
 
-def get_config(path: str = './configv2.yml') -> dict:
+def get_config(path: str = './config.yml') -> dict:
     with open(path, 'r') as file:
         config = yaml.safe_load(file)
     return config
@@ -793,7 +793,7 @@ if __name__ == "__main__":
     import argparse
     
     parser = argparse.ArgumentParser(description='Run the experiments')
-    parser.add_argument('--config', type=str, default='./configv2.yml', help='The path to the config file')
+    parser.add_argument('--config', type=str, default='./config.yml', help='The path to the config file')
     
     args = parser.parse_args()
     
