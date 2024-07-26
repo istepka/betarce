@@ -429,7 +429,8 @@ def experiment(config: dict):
                     _base['delta_max'] = dmx
                     _base['lr'] = lr
                     _base['norm'] = norm
-                    all_combinations.append(_base)
+                    hparams_to_save = _base.copy()
+                    all_combinations.append((_base, hparams_to_save))
     elif base_cf_method == 'rbr':
         hparams: dict = config['rbr']
         all_combinations = []
@@ -440,7 +441,12 @@ def experiment(config: dict):
                     _base['perturb_radius']['synthesis'] = pr
                     _base['ec']['rbr_params']['delta_plus'] = dp
                     _base['ec']['rbr_params']['sigma'] = s
-                    all_combinations.append(_base)
+                    hparams_to_save = {
+                        'perturb_radius': pr,
+                        'delta_plus': dp,
+                        'sigma': s
+                    }
+                    all_combinations.append((_base, hparams_to_save))
     elif base_cf_method == 'face':
         hparams = config['face']
         all_combinations = []
@@ -449,10 +455,11 @@ def experiment(config: dict):
                 _base = deepcopy(hparams)
                 _base['fraction'] = f
                 _base['mode'] = m
-                all_combinations.append(_base)
+                hp_to_save = _base.copy()
+                all_combinations.append((_base, hp_to_save))
     elif base_cf_method == 'gs':
         hparams = config['gs']
-        all_combinations = [hparams]
+        all_combinations = [(hparams, hparams)]
     elif base_cf_method == 'dice':
         hparams = config['dice']
         all_combinations = []
@@ -463,7 +470,8 @@ def experiment(config: dict):
                     _base['proximity_weight'] = pw
                     _base['diversity_weight'] = dw
                     _base['sparsity_weight'] = ct
-                    all_combinations.append(_base)
+                    hparams_to_save = _base.copy()
+                    all_combinations.append((_base, hparams_to_save))
     else:
         raise ValueError('Unknown base counterfactual method')
    
@@ -485,7 +493,7 @@ def experiment(config: dict):
             for k_mlps_in_B in k_mlps_in_B_options:
             
                 dataset = Dataset(dataset_name)
-                for hparams in all_combinations:
+                for (hparams, hparams_to_save) in all_combinations:
                     for fold_i in range(cv_folds):
                         logging.info(f"Running experiment for fold: {fold_i}")
 
@@ -775,7 +783,7 @@ def experiment(config: dict):
                                         'robust_counterfactual_time': time_robust_cf,
                                     }
                                     # Add artifact_dict to the record
-                                    record = {**base_cf_record, **hparams, **robust_cf_record, **artifact_dict}
+                                    record = {**base_cf_record, **hparams_to_save, **robust_cf_record, **artifact_dict}
                                     record = pd.DataFrame(record, index=[0])
                                     results_df = pd.concat([results_df, record], ignore_index=True)
                         
