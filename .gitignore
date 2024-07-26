@@ -4,6 +4,9 @@
 wandb/
 slurm_*
 
+aaai_experiments/
+bash_scripts/aaai/*
+
 models/
 results/
 results*/

@@ -1,14 +1,15 @@
 #!/bin/bash
 #SBATCH --job-name=BRCE_base
-#SBATCH --output=slurm_logs/1807/nn_exp_%A_%a.out
-#SBATCH --error=slurm_logs/1807/nn_exp_%A_%a.err
+#SBATCH --output=slurm_logs/2607_base/nn_exp_%A_%a.out
+#SBATCH --error=slurm_logs/2607_base/nn_exp_%A_%a.err
 #SBATCH --array=0-4
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=24
-#SBATCH --mem=32G
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=12G
 #SBATCH --time=168:00:00
 #SBATCH --partition=obl
+#SBATCH --nodelist=obl2
 
 # Array of configuration files
 configs=(

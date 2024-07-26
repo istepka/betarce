@@ -17,10 +17,10 @@ experiments_setup:
     - "Seed"
   perform_generalizations: False
   datasets:
-    - "diabetes"
-    - "fico"
     - "breast_cancer"
     - "wine_quality"
+    - "diabetes"
+    - "fico"
   beta_confidences:
     - 0.95
   delta_robustnesses:
