@@ -2,12 +2,8 @@ import scipy.stats as stats
 import pandas as pd
 
 confidence = 0.95
-a = 48
+a = 1
 b = 1
-
-lb, rb = stats.beta.interval(confidence, a, b)
-
-print(f'Parameters a={a}, b={b} with confidence {confidence} gives the interval: [{lb:.3f}, {rb:.3f}]')
 
 print(stats.beta.ppf(0.025, a, b))
 
@@ -15,14 +11,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 k = [1, 2] + [i for i in range(4, 128, 4)]
-conf = [0.7,  0.8,  0.9, 0.95, 0.99]
+conf = [0.7,  0.8,  0.9, 0.95, 0.975, 0.99, 0.9999]
 
 maxdeltas = []
 
 for c in conf:
     deltas = []
     for i in k:
-        lb, rb = stats.beta.interval(c, 0.5 + i, 0.5)
+        lb = stats.beta.ppf(1 - c, a + i, b)
         deltas.append(lb)
     maxdeltas.append(deltas)
     
@@ -48,15 +44,15 @@ plt.show()
 
 
 
-k = [1, 2] + [i for i in range(4, 128, 4)]
-conf = [0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 0.975, 0.99]
+k = [1, 2] + [i for i in range(4, 128, 8)]
+conf = [0.7,  0.8,  0.9, 0.95, 0.975, 0.99]
 
 maxdeltas = []
 
 for c in conf:
     deltas = []
     for i in k:
-        lb, rb = stats.beta.interval(c, 0.5 + i, 0.5)
+        lb, rb = stats.beta.interval(c, a + i, b)
         deltas.append(lb)
     maxdeltas.append(deltas)
 

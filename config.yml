@@ -10,20 +10,20 @@ general:
   save_every_n_iterations: 10
 
 experiments_setup:
-  robust_cf_method: "robx" # robx or betarob
+  robust_cf_method: "betarob" # robx or betarob
   ex_types:
-    - "Architecture"
+    # - "Architecture"
     - "Seed"
-    - "Bootstrap"
+    # - "Bootstrap"
   perform_generalizations: False
   datasets:
     - "fico"
     # - "wine_quality"
     # - "breast_cancer"
   beta_confidences:
-    - 0.5
+    - 0.9
   delta_robustnesses:
-    - 0.5
+    - 0.9
   x_test_size: 10
   m_count_per_experiment: 4
   cross_validation_folds: 3
@@ -34,8 +34,8 @@ experiments_setup:
     - "proximityL2"
     - "plausibility"
     - "dpow"
-  model_type_to_use:  "lightgbm" # - "random_forest" neural_network
-  just_base_cf: True
+  model_type_to_use:  "neural_network" # - "random_forest" neural_network
+  just_base_cf: False
   
 model_hyperparameters:
   neural_network:
@@ -129,7 +129,7 @@ model_hyperparameters:
 
 beta_rob:
   k_mlps_in_B: 
-    - 4
+    - 32
   growingSpheresHparams:
     max_iter: 100
     n_search_samples: 100

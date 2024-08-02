@@ -230,7 +230,7 @@ class BetaRob(BaseExplainer):
         beta += zeros
         
         # Get the lower bound of credible interval for p from Beta  
-        left_bound, _ = stats.beta.interval(beta_confidence, alpha, beta)
+        left_bound = stats.beta.ppf(1 - beta_confidence, alpha, beta)
         return left_bound
     
     def __get_credible_interval_bounds(self, instance: np.ndarray,
