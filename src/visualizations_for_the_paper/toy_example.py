@@ -1,6 +1,7 @@
 import sklearn.datasets
 import sklearn.linear_model
 import sklearn.neighbors
+from sklearn.neural_network  import MLPClassifier
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
@@ -11,13 +12,13 @@ data_X, data_y = data
 
 classifiers = []
 for i in range(5, 20, 2):
-    classifier = sklearn.neighbors.KNeighborsClassifier(n_neighbors=i)
+    classifier = MLPClassifier(hidden_layer_sizes=(i, i), max_iter=1000)
     classifier.fit(data_X , data[1])
     classifiers.append(classifier)  
 
 
 original = [0.0, 0.0]
-base = [0.5, 0.4]
+base = [0.5, 0.35]
 counterfactuals = [[0.45, 0.5], [0.5, 0.6], [0.59, 0.65], [0.69, 0.67]]#, [0.3, 0.7], [0.45, 0.7], [0.5, 0.8], [0.72, 0.84]]
 deltas = [0.6, 0.7, 0.8, 0.9]
 
