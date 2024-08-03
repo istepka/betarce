@@ -28,18 +28,15 @@ colors = plt.cm.viridis(np.linspace(0, 0.8, len(conf)))
 for i, c in enumerate(conf):
     ax.plot(k, maxdeltas[i], label=f'Confidence: {c}', color=colors[i])
     
-ax.set_xlabel('Number of estimators k')
-ax.set_ylabel('Max achievable delta')
+ax.set_xlabel('Number of estimators k', fontsize=16)
+ax.set_ylabel('Max achievable delta', fontsize=16)
 ax.set_yticks([0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 1])
 
 # plt.grid(axis='y')
 plt.grid()
-plt.title('Max achievable delta-Robustness for different alpha-confidence levels')
-plt.legend()
+plt.legend(fontsize=14)
 plt.tight_layout()
-
 plt.savefig('images/betarob/max_delta_analysis.png', dpi=300, bbox_inches='tight')
-
 plt.show()
 
 
