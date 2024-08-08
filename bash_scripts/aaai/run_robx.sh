@@ -1,58 +1,54 @@
 #!/bin/bash
-#SBATCH --job-name=betaRCE_Robx
-#SBATCH --output=slurm_logs/2507/nn_exp_%A_%a.out
-#SBATCH --error=slurm_logs/2507/nn_exp_%A_%a.err
-#SBATCH --array=0-11
+#SBATCH --job-name=RCE_Robx
+#SBATCH --output=slurm_logs/2907_robx/l_%A_%a.out
+#SBATCH --error=slurm_logs/2907_robx/l_%A_%a.err
+#SBATCH --array=0-35
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=16G
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=8G
 #SBATCH --time=168:00:00
 #SBATCH --partition=obl
+#SBATCH --nodelist=obl2
 
 # Array of configuration files
 configs=(
-    # dice configurations
-    "./bash_scripts/aaai/robx/dice/nn_breastA.yml"
-    "./bash_scripts/aaai/robx/dice/nn_breastB.yml"
-    "./bash_scripts/aaai/robx/dice/nn_breastS.yml"
-    "./bash_scripts/aaai/robx/dice/nn_diabetesA.yml"
-    "./bash_scripts/aaai/robx/dice/nn_diabetesB.yml"
-    "./bash_scripts/aaai/robx/dice/nn_diabetesS.yml"
-    "./bash_scripts/aaai/robx/dice/nn_ficoA.yml"
-    "./bash_scripts/aaai/robx/dice/nn_ficoB.yml"
-    "./bash_scripts/aaai/robx/dice/nn_ficoS.yml"
-    "./bash_scripts/aaai/robx/dice/nn_wineA.yml"
-    "./bash_scripts/aaai/robx/dice/nn_wineB.yml"
-    "./bash_scripts/aaai/robx/dice/nn_wineS.yml"
-    
-    # # face configurations
-    # "./bash_scripts/aaai/robx/face/nn_breastA.yml"
-    # "./bash_scripts/aaai/robx/face/nn_breastB.yml"
-    # "./bash_scripts/aaai/robx/face/nn_breastS.yml"
-    # "./bash_scripts/aaai/robx/face/nn_diabetesA.yml"
-    # "./bash_scripts/aaai/robx/face/nn_diabetesB.yml"
-    # "./bash_scripts/aaai/robx/face/nn_diabetesS.yml"
-    # "./bash_scripts/aaai/robx/face/nn_ficoA.yml"
-    # "./bash_scripts/aaai/robx/face/nn_ficoB.yml"
-    # "./bash_scripts/aaai/robx/face/nn_ficoS.yml"
-    # "./bash_scripts/aaai/robx/face/nn_wineA.yml"
-    # "./bash_scripts/aaai/robx/face/nn_wineB.yml"
-    # "./bash_scripts/aaai/robx/face/nn_wineS.yml"
-    
-    # # gs configurations
-    # "./bash_scripts/aaai/robx/gs/nn_breastA.yml"
-    # "./bash_scripts/aaai/robx/gs/nn_breastB.yml"
-    # "./bash_scripts/aaai/robx/gs/nn_breastS.yml"
-    # "./bash_scripts/aaai/robx/gs/nn_diabetesA.yml"
-    # "./bash_scripts/aaai/robx/gs/nn_diabetesB.yml"
-    # "./bash_scripts/aaai/robx/gs/nn_diabetesS.yml"
-    # "./bash_scripts/aaai/robx/gs/nn_ficoA.yml"
-    # "./bash_scripts/aaai/robx/gs/nn_ficoB.yml"
-    # "./bash_scripts/aaai/robx/gs/nn_ficoS.yml"
-    # "./bash_scripts/aaai/robx/gs/nn_wineA.yml"
-    # "./bash_scripts/aaai/robx/gs/nn_wineB.yml"
-    # "./bash_scripts/aaai/robx/gs/nn_wineS.yml"
+"./bash_scripts/aaai/robx/robx/gs_rob_bre_Arc.yml"
+"./bash_scripts/aaai/robx/robx/dic_rob_bre_Arc.yml"
+"./bash_scripts/aaai/robx/robx/fac_rob_bre_Arc.yml"
+"./bash_scripts/aaai/robx/robx/gs_rob_bre_Boo.yml"
+"./bash_scripts/aaai/robx/robx/dic_rob_bre_Boo.yml"
+"./bash_scripts/aaai/robx/robx/fac_rob_bre_Boo.yml"
+"./bash_scripts/aaai/robx/robx/gs_rob_bre_See.yml"
+"./bash_scripts/aaai/robx/robx/dic_rob_bre_See.yml"
+"./bash_scripts/aaai/robx/robx/fac_rob_bre_See.yml"
+"./bash_scripts/aaai/robx/robx/gs_rob_win_Arc.yml"
+"./bash_scripts/aaai/robx/robx/dic_rob_win_Arc.yml"
+"./bash_scripts/aaai/robx/robx/fac_rob_win_Arc.yml"
+"./bash_scripts/aaai/robx/robx/gs_rob_win_Boo.yml"
+"./bash_scripts/aaai/robx/robx/dic_rob_win_Boo.yml"
+"./bash_scripts/aaai/robx/robx/fac_rob_win_Boo.yml"
+"./bash_scripts/aaai/robx/robx/gs_rob_win_See.yml"
+"./bash_scripts/aaai/robx/robx/dic_rob_win_See.yml"
+"./bash_scripts/aaai/robx/robx/fac_rob_win_See.yml"
+"./bash_scripts/aaai/robx/robx/gs_rob_dia_Arc.yml"
+"./bash_scripts/aaai/robx/robx/dic_rob_dia_Arc.yml"
+"./bash_scripts/aaai/robx/robx/fac_rob_dia_Arc.yml"
+"./bash_scripts/aaai/robx/robx/gs_rob_dia_Boo.yml"
+"./bash_scripts/aaai/robx/robx/dic_rob_dia_Boo.yml"
+"./bash_scripts/aaai/robx/robx/fac_rob_dia_Boo.yml"
+"./bash_scripts/aaai/robx/robx/gs_rob_dia_See.yml"
+"./bash_scripts/aaai/robx/robx/dic_rob_dia_See.yml"
+"./bash_scripts/aaai/robx/robx/fac_rob_dia_See.yml"
+"./bash_scripts/aaai/robx/robx/gs_rob_fic_Arc.yml"
+"./bash_scripts/aaai/robx/robx/dic_rob_fic_Arc.yml"
+"./bash_scripts/aaai/robx/robx/fac_rob_fic_Arc.yml"
+"./bash_scripts/aaai/robx/robx/gs_rob_fic_Boo.yml"
+"./bash_scripts/aaai/robx/robx/dic_rob_fic_Boo.yml"
+"./bash_scripts/aaai/robx/robx/fac_rob_fic_Boo.yml"
+"./bash_scripts/aaai/robx/robx/gs_rob_fic_See.yml"
+"./bash_scripts/aaai/robx/robx/dic_rob_fic_See.yml"
+"./bash_scripts/aaai/robx/robx/fac_rob_fic_See.yml"
 )
 
 # Get the configuration file for this job array task
