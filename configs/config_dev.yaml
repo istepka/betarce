@@ -6,6 +6,13 @@ hydra:
     # override the number of jobs for joblib
     n_jobs: 10
 
+    # for slurm
+    # cpus_per_task: 4
+    # mem_per_cpu: 4G
+    # timeout_min: 10080
+    # partition: obl
+
+
 general:
   data_path: data/
   model_path: models/
@@ -14,7 +21,7 @@ general:
   random_state: 345
   random_seed: 345
   logging_level: INFO
-  n_jobs: 2
+  n_jobs: 1
   save_every_n_iterations: 10
 
 experiments_setup:
@@ -30,7 +37,7 @@ experiments_setup:
     # - "breast_cancer"
     # - "car_eval"
     - "rice"
-    # - "diabetes"
+    - "diabetes"
   beta_confidences:
     - 0.9
   delta_robustnesses:

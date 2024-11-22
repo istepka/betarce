@@ -31,9 +31,9 @@ log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 
 
-@hydra.main(config_path="..", config_name="config", version_base=None)
+@hydra.main(config_path="../configs", config_name="config_dev", version_base=None)
 def experiment(cfg: DictConfig):
-    config = OmegaConf.to_container(cfg, resolve=True)
+    config = OmegaConf.to_container(cfg)
 
     GENERAL = config["general"]
     EXPERIMENTS_SETUP = config["experiments_setup"]
@@ -104,9 +104,19 @@ def experiment(cfg: DictConfig):
         * x_test_size
         * len(k_mlps_in_B_options)
     )
+    # Log each number
+    logging.info(f"Number of experiments: {len(ex_types)}")
+    logging.info(f"Number of datasets: {len(datasets)}")
+    logging.info(f"Number of cross-validation folds: {cv_folds}")
+    logging.info(f"Number of M_2 models per experiment: {m_count_per_experiment}")
+    logging.info(f"Number of test samples: {x_test_size}")
+    logging.info(f"Number of k_mlps_in_B options: {len(k_mlps_in_B_options)}")
 
     if perform_generalizations:  # If generalizations are performed, then multiply the iterations by the number of generalizations
         all_iterations *= 3  # TODO: Make it dynamic
+        logging.info("Number of generalizations: 3")
+
+    logging.info(f"Total number of iterations: {all_iterations}")
 
     if not just_base_cf:
         if (

@@ -357,6 +357,79 @@ def diabetes(path: str = "data/diabetes.csv") -> dict:
     return data
 
 
+def car_eval(path: str = "data/car_eval.csv") -> dict:
+    df = pd.read_csv(path)
+
+    cat_to_num = {
+        "buying": {"low": 0, "med": 1, "high": 2, "vhigh": 3},
+        "maint": {"low": 0, "med": 1, "high": 2, "vhigh": 3},
+        "doors": {"2": 0, "3": 1, "4": 2, "5more": 3},
+        "persons": {"2": 0, "4": 1, "more": 2},
+        "lug_boot": {"small": 0, "med": 1, "big": 2},
+        "safety": {"low": 0, "med": 1, "high": 2},
+        "acceptability": {"unacc": 0, "acc": 1, "good": 1, "vgood": 1},
+    }
+
+    transformed = df.copy()
+    for col, mapping in cat_to_num.items():
+        transformed[col] = transformed[col].map(mapping)
+
+    transformed = transformed.rename(columns={"acceptability": "target"})
+
+    continuous_columns = ["buying", "maint", "doors", "persons", "lug_boot", "safety"]
+    categorical_columns = []
+
+    target_column = "target"
+    freeze_columns = []
+
+    feature_ranges = {}
+    monotonic_increase_columns = []
+
+    monotonic_decrease_columns = []
+
+    data = {
+        "raw_df": transformed,
+        "categorical_columns": categorical_columns,
+        "continuous_columns": continuous_columns,
+        "target_column": target_column,
+        "monotonic_increase_columns": monotonic_increase_columns,
+        "monotonic_decrease_columns": monotonic_decrease_columns,
+        "freeze_columns": freeze_columns,
+        "feature_ranges": feature_ranges,
+    }
+
+    return data
+
+
+def rice(path: str = "data/rice.csv") -> dict:
+    raw_df = pd.read_csv(path)
+
+    categorical_columns = []
+    continuous_columns = raw_df.columns.tolist()
+    continuous_columns.remove("class")
+
+    target_column = "class"
+
+    freeze_columns = []
+    feature_ranges = {k: [raw_df[k].min(), raw_df[k].max()] for k in continuous_columns}
+    monotonic_increase_columns = []
+
+    monotonic_decrease_columns = []
+
+    data = {
+        "raw_df": raw_df,
+        "categorical_columns": categorical_columns,
+        "continuous_columns": continuous_columns,
+        "target_column": target_column,
+        "monotonic_increase_columns": monotonic_increase_columns,
+        "monotonic_decrease_columns": monotonic_decrease_columns,
+        "freeze_columns": freeze_columns,
+        "feature_ranges": feature_ranges,
+    }
+
+    return data
+
+
 def compas(path: str = "data/compas.csv") -> dict:
     """
     Load the compas dataset.
