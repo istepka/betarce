@@ -3,8 +3,8 @@ import pandas as pd
 import logging
 from scipy import stats
 
-from explainers import BaseExplainer, GrowingSpheresExplainer
-from datasets import Dataset, DatasetPreprocessor
+from .explainers import BaseExplainer, GrowingSpheresExplainer
+from .datasets import Dataset, DatasetPreprocessor
 
 
 def prepare_growing_spheres(

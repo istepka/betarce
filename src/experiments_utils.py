@@ -4,37 +4,37 @@ import numpy as np
 from scipy import stats
 from sklearn.neighbors import NearestNeighbors
 
-from datasets import Dataset, DatasetPreprocessor
-from classifiers.mlpclassifier import (
+from .datasets import Dataset, DatasetPreprocessor
+from .classifiers.mlpclassifier import (
     MLPClassifier,
     train_neural_network,
     train_K_mlps_in_parallel,
 )
-from classifiers.rfclassifier import (
+from .classifiers.rfclassifier import (
     RFClassifier,
     train_random_forest,
     train_K_rfs_in_parallel,
 )
-from classifiers.dtclassifier import (
+from .classifiers.dtclassifier import (
     DecisionTree,
     train_decision_tree,
     train_K_dts_in_parallel,
 )
-from classifiers.lgbmclassifier import (
+from .classifiers.lgbmclassifier import (
     LGBMClassifier,
     train_lgbm,
     train_K_LGBMS_in_parallel,
 )
-from classifiers.baseclassifier import BaseClassifier
-from classifiers.utils import bootstrap_data
-from explainers import (
+from .classifiers.baseclassifier import BaseClassifier
+from .classifiers.utils import bootstrap_data
+from .explainers import (
     DiceExplainer,
     GrowingSpheresExplainer,
     BaseExplainer,
     CarlaExplainer,
     RBRExplainer,
 )
-from betarob import BetaRob
+from .betarob import BetaRob
 
 
 def get_config(path: str = "./config.yml") -> dict:

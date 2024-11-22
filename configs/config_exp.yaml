@@ -1,17 +1,17 @@
 defaults:
-  - override hydra/launcher: joblib
-  # - override hydra/launcher: submitit_slurm
+  # - override hydra/launcher: joblib
+  - override hydra/launcher: submitit_slurm
 
 hydra:
   launcher:
     # JOBLIB max jobs
-    n_jobs: 10
+    # n_jobs: 10
 
     # SLURM
-    # cpus_per_task: 4
-    # mem_per_cpu: 4G
-    # timeout_min: 10080
-    # partition: obl
+    cpus_per_task: 4
+    mem_per_cpu: 4G
+    timeout_min: 10080
+    partition: obl
 
 
 general:
@@ -41,8 +41,8 @@ experiments_setup:
     - 0.95
   delta_robustnesses:
     - 0.9
-  x_test_size: 50
-  m_count_per_experiment: 30
+  x_test_size: 3
+  m_count_per_experiment: 4
   cross_validation_folds: 3
   base_counterfactual_method: "gs" # - "dice"
   metrics_to_calculate:

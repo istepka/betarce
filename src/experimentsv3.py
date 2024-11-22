@@ -6,12 +6,11 @@ import pandas as pd
 import numpy as np
 from tqdm import tqdm
 from sklearn.neighbors import NearestNeighbors
-import hydra
-from omegaconf import DictConfig, OmegaConf
 
 # Project imports
-from datasets import Dataset, DatasetPreprocessor
-from experiments_utils import (
+from .robx import robx_algorithm
+from .datasets import Dataset, DatasetPreprocessor
+from .experiments_utils import (
     train_model,
     train_B,
     train_model_2,
@@ -25,15 +24,12 @@ from experiments_utils import (
     sample_architectures,
     get_B,
 )
-from robx import robx_algorithm
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 
 
-@hydra.main(config_path="../configs", config_name="config_dev", version_base=None)
-def experiment(cfg: DictConfig):
-    config = OmegaConf.to_container(cfg)
+def experiment(config: dict):
 
     GENERAL = config["general"]
     EXPERIMENTS_SETUP = config["experiments_setup"]
