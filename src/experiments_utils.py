@@ -234,7 +234,7 @@ def base_counterfactual_generate(
         )
 
 
-def robust_counterfactual_generate(
+def betarce_generate(
     start_instance: np.ndarray | pd.DataFrame,
     target_class: int,
     delta_target: float,
@@ -398,3 +398,31 @@ def sample_seeds(n: int) -> list[int]:
     """
     seeds = np.random.choice(1000, n, replace=False)
     return seeds
+
+
+def get_B(
+    ex_type,
+    k_mlps_in_B,
+    model_fixed_hparams,
+    model_hyperparameters_pool,
+    model_fixed_seed,
+) -> tuple:
+    # Should bootstrap vary?
+    if "bootstrap" in ex_type.lower():
+        bootstrapB = sample_seeds(k_mlps_in_B)
+    else:
+        bootstrapB = [model_fixed_seed] * k_mlps_in_B
+
+    # Should seed vary?
+    if "seed" in ex_type.lower():
+        seedB = sample_seeds(k_mlps_in_B)
+    else:
+        seedB = [model_fixed_seed] * k_mlps_in_B
+
+    # Should architecture vary?
+    if "architecture" in ex_type.lower():
+        hparamsB = sample_architectures(k_mlps_in_B, model_hyperparameters_pool)
+    else:
+        hparamsB = [model_fixed_hparams] * k_mlps_in_B
+
+    return seedB, hparamsB, bootstrapB

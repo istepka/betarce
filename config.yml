@@ -126,7 +126,6 @@ model_hyperparameters:
       subsample: 0.8
     model_fixed_seed: 42
       
-
 beta_rob:
   k_mlps_in_B: 
     - 32
