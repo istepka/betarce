@@ -12,7 +12,7 @@ robust_method=betarob,robx
 datasets=[car_eval],[rice]
 ex_type=[Architecture],[Bootstrap],[Seed]
 base_cf=gs,dice,face
-model_type_to_use=neural_network,lgbm
+model_type_to_use=neural_network,lightgbm
 
 echo "Running experiment: $EXPERIMENT_NAME"
 
@@ -21,7 +21,7 @@ conda activate betarce
 
 echo "Starting now ..."
 
-python src/experimentsv3.py -cn $CONFIG_FILENAME --multirun \
+python experiment_runner.py -cn $CONFIG_FILENAME --multirun \
     experiments_setup.robust_cf_method=$robust_method \
     experiments_setup.datasets=$datasets \
     experiments_setup.ex_types=$ex_type \

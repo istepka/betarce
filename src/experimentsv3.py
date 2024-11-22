@@ -26,16 +26,22 @@ from .experiments_utils import (
 )
 
 log = logging.getLogger(__name__)
-log.setLevel(logging.INFO)
+log.setLevel(logging.DEBUG)
 
 
 def experiment(config: dict):
+
+    salted_hash = str(hash(str(config)) + int(time.time()))[:10]
 
     GENERAL = config["general"]
     EXPERIMENTS_SETUP = config["experiments_setup"]
     MODEL_HYPERPARAMETERS = config["model_hyperparameters"]
     BETA_ROB = config["beta_rob"]
     ROBX = config["robx"]
+    
+    GENERAL["result_path"] = os.path.join(GENERAL["result_path"], salted_hash)
+    GENERAL["model_path"] = os.path.join(GENERAL["model_path"], salted_hash)
+    GENERAL["log_path"] = os.path.join(GENERAL["log_path"], salted_hash)
 
     # Extract the results directory
     results_dir = GENERAL["result_path"]
@@ -560,10 +566,10 @@ def experiment(config: dict):
                                 global_iteration % save_every_n_iterations == 0
                                 and global_iteration > 0
                             ):
-                                # results_df.to_feather(f'./{results_df_dir}/{global_iteration}_results.feather')
-                                results_df.to_csv(
-                                    f"{results_df_dir}/{global_iteration}_results.csv"
-                                )
+                                results_df.to_feather(f'./{results_df_dir}/{global_iteration}_results.feather')
+                                # results_df.to_csv(
+                                #     f"{results_df_dir}/{global_iteration}_results.csv"
+                                # )
                                 cols = results_df.columns
 
                                 # Clear the results_df to save memory and speed up the process
@@ -576,8 +582,8 @@ def experiment(config: dict):
                         first_flag = False
 
     # Final save
-    # results_df.to_feather(f'./{results_df_dir}/{global_iteration}_results.feather')
-    results_df.to_csv(f"{results_df_dir}/{global_iteration}_results.csv")
+    results_df.to_feather(f'./{results_df_dir}/{global_iteration}_results.feather')
+    # results_df.to_csv(f"{results_df_dir}/{global_iteration}_results.csv")
     # results_df = pd.DataFrame(columns=results_df.columns)
 
     # Progress bar close

@@ -8,8 +8,8 @@ hydra:
     # n_jobs: 10
 
     # SLURM
-    cpus_per_task: 4
-    mem_per_cpu: 4G
+    cpus_per_task: 1
+    mem_per_cpu: 8G
     timeout_min: 10080
     partition: obl
 
@@ -38,11 +38,12 @@ experiments_setup:
     - "diabetes"
     - "fico"
   beta_confidences:
-    - 0.95
-  delta_robustnesses:
     - 0.9
-  x_test_size: 3
-  m_count_per_experiment: 4
+  delta_robustnesses:
+    - 0.8
+    - 0.9
+  x_test_size: 30
+  m_count_per_experiment: 30
   cross_validation_folds: 3
   base_counterfactual_method: "gs" # - "dice"
   metrics_to_calculate:
