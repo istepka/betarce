@@ -11,6 +11,8 @@ models/
 results/
 results*/
 old_results/
+outputs/
+multirun/
 
 images/random
 

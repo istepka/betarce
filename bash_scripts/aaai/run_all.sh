@@ -1,59 +1,56 @@
 #!/bin/bash
-#SBATCH --job-name=betaRCE_DICE
-#SBATCH --output=slurm_logs/2407/nn_exp_%A_%a.out
-#SBATCH --error=slurm_logs/2407/nn_exp_%A_%a.err
-#SBATCH --array=0-11
-#SBATCH --nodes=1
+#SBATCH --job-name=RCE_all
+#SBATCH --output=slurm_logs/0208_all_betarce/l_%A_%a.out
+#SBATCH --error=slurm_logs/0208_all_betarce/l_%A_%a.err
+#SBATCH --array=0-35
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=16G
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=8G
 #SBATCH --time=168:00:00
+#SBATCH --nodes=1
 #SBATCH --partition=obl
-#SBATCH --nodelist=obl1
+#SBATCH --nodelist=obl2
+#SBATCH --distribution=pack
+
 
 # Array of configuration files
 configs=(
-    # dice configurations
-    "./bash_scripts/aaai/dice/nn_breastA.yml"
-    "./bash_scripts/aaai/dice/nn_breastB.yml"
-    "./bash_scripts/aaai/dice/nn_breastS.yml"
-    "./bash_scripts/aaai/dice/nn_diabetesA.yml"
-    "./bash_scripts/aaai/dice/nn_diabetesB.yml"
-    "./bash_scripts/aaai/dice/nn_diabetesS.yml"
-    "./bash_scripts/aaai/dice/nn_ficoA.yml"
-    "./bash_scripts/aaai/dice/nn_ficoB.yml"
-    "./bash_scripts/aaai/dice/nn_ficoS.yml"
-    "./bash_scripts/aaai/dice/nn_wineA.yml"
-    "./bash_scripts/aaai/dice/nn_wineB.yml"
-    "./bash_scripts/aaai/dice/nn_wineS.yml"
-    
-    # # face configurations
-    # "./bash_scripts/aaai/face/nn_breastA.yml"
-    # "./bash_scripts/aaai/face/nn_breastB.yml"
-    # "./bash_scripts/aaai/face/nn_breastS.yml"
-    # "./bash_scripts/aaai/face/nn_diabetesA.yml"
-    # "./bash_scripts/aaai/face/nn_diabetesB.yml"
-    # "./bash_scripts/aaai/face/nn_diabetesS.yml"
-    # "./bash_scripts/aaai/face/nn_ficoA.yml"
-    # "./bash_scripts/aaai/face/nn_ficoB.yml"
-    # "./bash_scripts/aaai/face/nn_ficoS.yml"
-    # "./bash_scripts/aaai/face/nn_wineA.yml"
-    # "./bash_scripts/aaai/face/nn_wineB.yml"
-    # "./bash_scripts/aaai/face/nn_wineS.yml"
-    
-    # gs configurations
-    # "./bash_scripts/aaai/gs/nn_breastA.yml"
-    # "./bash_scripts/aaai/gs/nn_breastB.yml"
-    # "./bash_scripts/aaai/gs/nn_breastS.yml"
-    # "./bash_scripts/aaai/gs/nn_diabetesA.yml"
-    # "./bash_scripts/aaai/gs/nn_diabetesB.yml"
-    # "./bash_scripts/aaai/gs/nn_diabetesS.yml"
-    # "./bash_scripts/aaai/gs/nn_ficoA.yml"
-    # "./bash_scripts/aaai/gs/nn_ficoB.yml"
-    # "./bash_scripts/aaai/gs/nn_ficoS.yml"
-    # "./bash_scripts/aaai/gs/nn_wineA.yml"
-    # "./bash_scripts/aaai/gs/nn_wineB.yml"
-    # "./bash_scripts/aaai/gs/nn_wineS.yml"
+"./bash_scripts/aaai/all/all_betarce_02_08/gs_bet_bre_Arc.yml"
+"./bash_scripts/aaai/all/all_betarce_02_08/dic_bet_bre_Arc.yml"
+"./bash_scripts/aaai/all/all_betarce_02_08/fac_bet_bre_Arc.yml"
+"./bash_scripts/aaai/all/all_betarce_02_08/gs_bet_bre_Boo.yml"
+"./bash_scripts/aaai/all/all_betarce_02_08/dic_bet_bre_Boo.yml"
+"./bash_scripts/aaai/all/all_betarce_02_08/fac_bet_bre_Boo.yml"
+"./bash_scripts/aaai/all/all_betarce_02_08/gs_bet_bre_See.yml"
+"./bash_scripts/aaai/all/all_betarce_02_08/dic_bet_bre_See.yml"
+"./bash_scripts/aaai/all/all_betarce_02_08/fac_bet_bre_See.yml"
+"./bash_scripts/aaai/all/all_betarce_02_08/gs_bet_win_Arc.yml"
+"./bash_scripts/aaai/all/all_betarce_02_08/dic_bet_win_Arc.yml"
+"./bash_scripts/aaai/all/all_betarce_02_08/fac_bet_win_Arc.yml"
+"./bash_scripts/aaai/all/all_betarce_02_08/gs_bet_win_Boo.yml"
+"./bash_scripts/aaai/all/all_betarce_02_08/dic_bet_win_Boo.yml"
+"./bash_scripts/aaai/all/all_betarce_02_08/fac_bet_win_Boo.yml"
+"./bash_scripts/aaai/all/all_betarce_02_08/gs_bet_win_See.yml"
+"./bash_scripts/aaai/all/all_betarce_02_08/dic_bet_win_See.yml"
+"./bash_scripts/aaai/all/all_betarce_02_08/fac_bet_win_See.yml"
+"./bash_scripts/aaai/all/all_betarce_02_08/gs_bet_dia_Arc.yml"
+"./bash_scripts/aaai/all/all_betarce_02_08/dic_bet_dia_Arc.yml"
+"./bash_scripts/aaai/all/all_betarce_02_08/fac_bet_dia_Arc.yml"
+"./bash_scripts/aaai/all/all_betarce_02_08/gs_bet_dia_Boo.yml"
+"./bash_scripts/aaai/all/all_betarce_02_08/dic_bet_dia_Boo.yml"
+"./bash_scripts/aaai/all/all_betarce_02_08/fac_bet_dia_Boo.yml"
+"./bash_scripts/aaai/all/all_betarce_02_08/gs_bet_dia_See.yml"
+"./bash_scripts/aaai/all/all_betarce_02_08/dic_bet_dia_See.yml"
+"./bash_scripts/aaai/all/all_betarce_02_08/fac_bet_dia_See.yml"
+"./bash_scripts/aaai/all/all_betarce_02_08/gs_bet_fic_Arc.yml"
+"./bash_scripts/aaai/all/all_betarce_02_08/dic_bet_fic_Arc.yml"
+"./bash_scripts/aaai/all/all_betarce_02_08/fac_bet_fic_Arc.yml"
+"./bash_scripts/aaai/all/all_betarce_02_08/gs_bet_fic_Boo.yml"
+"./bash_scripts/aaai/all/all_betarce_02_08/dic_bet_fic_Boo.yml"
+"./bash_scripts/aaai/all/all_betarce_02_08/fac_bet_fic_Boo.yml"
+"./bash_scripts/aaai/all/all_betarce_02_08/gs_bet_fic_See.yml"
+"./bash_scripts/aaai/all/all_betarce_02_08/dic_bet_fic_See.yml"
+"./bash_scripts/aaai/all/all_betarce_02_08/fac_bet_fic_See.yml"
 )
 
 # Get the configuration file for this job array task

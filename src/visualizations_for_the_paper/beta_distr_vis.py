@@ -25,13 +25,12 @@ for a, b in beta_settings:
     y = stats.beta.pdf(x, a, b) / len(x)
     ax.plot(x, y, label=f'a={a}, b={b}', linestyle=lines.pop(0), color=colors.pop(0))
     
-ax.set_xlabel('x')
-ax.set_ylabel('Probability Density')
-ax.set_title('Beta Distribution')
+ax.set_xlabel('x', fontsize=16)
+ax.set_ylabel('Probability Density', fontsize=11)
 # plt.yticks([])
 
 # plt.grid()
-plt.legend()
+plt.legend(fontsize=10)
 plt.tight_layout()
 
 plt.savefig('images/betarob/beta_distr.png', dpi=300, bbox_inches='tight')
