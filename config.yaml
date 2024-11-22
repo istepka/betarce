@@ -1,3 +1,11 @@
+defaults:
+  - override hydra/launcher: joblib
+
+hydra:
+  launcher:
+    # override the number of jobs for joblib
+    n_jobs: 10
+
 general:
   data_path: data/
   model_path: models/
@@ -17,9 +25,12 @@ experiments_setup:
     # - "Bootstrap"
   perform_generalizations: False
   datasets:
-    - "fico"
+    # - "fico"
     # - "wine_quality"
     # - "breast_cancer"
+    # - "car_eval"
+    - "rice"
+    # - "diabetes"
   beta_confidences:
     - 0.9
   delta_robustnesses:

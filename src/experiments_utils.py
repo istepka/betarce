@@ -425,4 +425,4 @@ def get_B(
     else:
         hparamsB = [model_fixed_hparams] * k_mlps_in_B
 
-    return seedB, hparamsB, bootstrapB
+    return hparamsB, seedB, bootstrapB

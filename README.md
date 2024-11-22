@@ -62,4 +62,8 @@ To fully reproduce experiments we created a bash script **bash_run_all_experimen
 
 After completing jobs created with **bash_run_all_experiments.sh**, you need to run `python src/helpers/process_results.py` in order to make the results ready to be read by notebooks creating visualizations in `src/paper_utils`. Everything is set to work out-of-the box, but if you make some adjustments to paths in scripts running the experiments, then please review the **process_results.py** and make proper adjustments. 
 
-
+***
+### New way of running experiments
+```
+python src/experimentsv3.py -cp <path-to-config-dir> -cn <config-name> 
+```

@@ -27,9 +27,14 @@ from experiments_utils import (
 )
 from robx import robx_algorithm
 
+log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)
 
-@hydra.main(config_path="config", config_name="config")
-def experiment(config: DictConfig):
+
+@hydra.main(config_path="..", config_name="config", version_base=None)
+def experiment(cfg: DictConfig):
+    config = OmegaConf.to_container(cfg, resolve=True)
+
     GENERAL = config["general"]
     EXPERIMENTS_SETUP = config["experiments_setup"]
     MODEL_HYPERPARAMETERS = config["model_hyperparameters"]
@@ -123,6 +128,8 @@ def experiment(config: DictConfig):
 
     for combination in all_combinations:
         ex_type, dataset_name, k_mlps_in_B, fold_i = combination
+        fold_i = int(fold_i)
+        k_mlps_in_B = int(k_mlps_in_B)
 
         logging.info(f"Running experiment type: {ex_type}")
 
@@ -570,3 +577,7 @@ def experiment(config: DictConfig):
     # Progress bar close
     tqdm_pbar.close()
     logging.info("Finished all experiments")
+
+
+if __name__ == "__main__":
+    experiment()

@@ -70,9 +70,7 @@ class DatasetPreprocessor:
         self.continuous_columns = self.dataset.continuous_columns
         self.categorical_columns = self.dataset.categorical_columns
 
-        self.X_train, self.X_test, self.y_train, self.y_test = (
-            self.__initial_transform_prep()
-        )
+        self.__initial_transform_prep()
 
     def __initial_transform_prep(self) -> list[pd.DataFrame]:
         """
@@ -105,13 +103,13 @@ class DatasetPreprocessor:
             fold_to_use = self.fold_idx
             for i, (train_index, test_index) in enumerate(kfold.split(X, y)):
                 if i == fold_to_use:
-                    X_train, X_test = X.iloc[train_index], X.iloc[test_index]
-                    y_train, y_test = y.iloc[train_index], y.iloc[test_index]
+                    self.X_train, self.X_test = X.iloc[train_index], X.iloc[test_index]
+                    self.y_train, self.y_test = y.iloc[train_index], y.iloc[test_index]
                     break
 
         else:
             if self.stratify:
-                X_train, X_test, y_train, y_test = train_test_split(
+                self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
                     X,
                     y,
                     test_size=1 - self.split,
@@ -119,7 +117,7 @@ class DatasetPreprocessor:
                     stratify=y,
                 )
             else:
-                X_train, X_test, y_train, y_test = train_test_split(
+                self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
                     X, y, test_size=1 - self.split, random_state=self.random_state
                 )
 
@@ -130,32 +128,36 @@ class DatasetPreprocessor:
         # y_test = y_test.reset_index(drop=True)
 
         if self.standardize_data:
-            X_train_s = self.standardize(X_train, self.continuous_columns, fit=True)
-            X_test_s = self.standardize(X_test, self.continuous_columns, fit=False)
+            X_train_s = self.standardize(
+                self.X_train, self.continuous_columns, fit=True
+            )
+            X_test_s = self.standardize(self.X_test, self.continuous_columns, fit=False)
 
-            X_train = X_train.drop(columns=self.continuous_columns)
-            X_test = X_test.drop(columns=self.continuous_columns)
+            self.X_train = self.X_train.drop(columns=self.continuous_columns)
+            self.X_test = self.X_test.drop(columns=self.continuous_columns)
 
-            X_train = pd.concat([X_train, X_train_s], axis=1)
-            X_test = pd.concat([X_test, X_test_s], axis=1)
+            self.X_train = pd.concat([self.X_train, X_train_s], axis=1)
+            self.X_test = pd.concat([self.X_test, X_test_s], axis=1)
 
         if self.one_hot:
-            X_train_o = self.one_hot_encode(X_train, self.categorical_columns, fit=True)
-            X_test_o = self.one_hot_encode(X_test, self.categorical_columns, fit=False)
+            X_train_o = self.one_hot_encode(
+                self.X_train, self.categorical_columns, fit=True
+            )
+            X_test_o = self.one_hot_encode(
+                self.X_test, self.categorical_columns, fit=False
+            )
 
             # Concate only if there were categorical columns
             if self.categorical_columns:
-                X_train = X_train.drop(columns=self.categorical_columns)
-                X_test = X_test.drop(columns=self.categorical_columns)
+                self.X_train = self.X_train.drop(columns=self.categorical_columns)
+                self.X_test = self.X_test.drop(columns=self.categorical_columns)
 
-                X_train = pd.concat([X_train, X_train_o], axis=1)
-                X_test = pd.concat([X_test, X_test_o], axis=1)
+                self.X_train = pd.concat([self.X_train, X_train_o], axis=1)
+                self.X_test = pd.concat([self.X_test, X_test_o], axis=1)
 
         if self.binarize_y:
-            y_train = self.label_encoder.fit_transform(y_train)
-            y_test = self.label_encoder.transform(y_test)
-
-        return [X_train, X_test, y_train, y_test]
+            self.y_train = self.label_encoder.fit_transform(self.y_train)
+            self.y_test = self.label_encoder.transform(self.y_test)
 
     def one_hot_encode(
         self, X: pd.DataFrame, categorical_columns: list[str], fit: bool
