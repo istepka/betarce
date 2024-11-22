@@ -1,3 +1,5 @@
+import traceback
+import sys
 import hydra
 from omegaconf import DictConfig, OmegaConf
 
@@ -9,7 +11,11 @@ from src.experimentsv3 import experiment
 def main(cfg: DictConfig):
     config = OmegaConf.to_container(cfg)
     
-    experiment(config)
+    try:
+        experiment(config)
+    except Exception:
+        traceback.print_exc(file=sys.stderr)
+        raise
     
     
 if __name__ == "__main__":
