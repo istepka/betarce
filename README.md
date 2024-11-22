@@ -2,6 +2,17 @@
 
 
 ### Setup
+
+Recursive clone:
+```bash
+git clone --recurse-submodules https://github.com/istepka/CARLA.git 
+```
+Or 
+```bash
+git clone https://github.com/istepka/CARLA.git 
+git submodule update --init --recursive
+```
+
 Conda:
 ```bash
 conda env create --name envname --file=environment.yml
