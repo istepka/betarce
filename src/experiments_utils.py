@@ -79,84 +79,34 @@ def train_B(
     X_test: pd.DataFrame,
     y_test: pd.Series,
 ) -> list:
+    kwargs = {
+        "X_train": X_train,
+        "y_train": y_train,
+        "X_test": X_test,
+        "y_test": y_test,
+        "hparamsB": hparamsB,
+        "bootstrapB": bootstrapB,
+        "seedB": seedB,
+        "hparams_base": model_base_hyperparameters,
+        "ex_type": ex_type,
+        "K": k_mlps_in_B,
+        "n_jobs": n_jobs,
+    }
+
     match model_type_to_use:
         case "neural_network":
-            results = train_K_mlps_in_parallel(
-                X_train=X_train,
-                y_train=y_train,
-                X_test=X_test,
-                y_test=y_test,
-                hparamsB=hparamsB,
-                bootstrapB=bootstrapB,
-                seedB=seedB,
-                hparams_base=model_base_hyperparameters,
-                ex_type=ex_type,
-                K=k_mlps_in_B,
-                n_jobs=n_jobs,
-            )
-            models = [
-                model
-                for partial_results in results
-                for model in partial_results["models"]
-            ]
+            results = train_K_mlps_in_parallel(**kwargs)
         case "decision_tree":
-            results = train_K_dts_in_parallel(
-                X_train=X_train,
-                y_train=y_train,
-                X_test=X_test,
-                y_test=y_test,
-                hparamsB=hparamsB,
-                bootstrapB=bootstrapB,
-                seedB=seedB,
-                hparams_base=model_base_hyperparameters,
-                K=k_mlps_in_B,
-                n_jobs=n_jobs,
-            )
-            models = [
-                model
-                for partial_results in results
-                for model in partial_results["models"]
-            ]
+            results = train_K_dts_in_parallel(**kwargs)
         case "lightgbm":
-            results = train_K_LGBMS_in_parallel(
-                X_train=X_train,
-                y_train=y_train,
-                X_test=X_test,
-                y_test=y_test,
-                hparamsB=hparamsB,
-                bootstrapB=bootstrapB,
-                seedB=seedB,
-                hparams_base=model_base_hyperparameters,
-                K=k_mlps_in_B,
-                n_jobs=n_jobs,
-            )
-            models = [
-                model
-                for partial_results in results
-                for model in partial_results["models"]
-            ]
+            results = train_K_LGBMS_in_parallel(**kwargs)
         case "logistic_regression":
-            results = train_K_lrs_in_parallel(
-                X_train=X_train,
-                y_train=y_train,
-                X_test=X_test,
-                y_test=y_test,
-                hparamsB=hparamsB,
-                bootstrapB=bootstrapB,
-                seedB=seedB,
-                hparams_base=model_base_hyperparameters,
-                K=k_mlps_in_B,
-                n_jobs=n_jobs,
-            )
-            models = [
-                model
-                for partial_results in results
-                for model in partial_results["models"]
-            ]
-
+            results = train_K_lrs_in_parallel(**kwargs)
         case _:
             raise ValueError("Unknown model type. Cannot train B models.")
-
+    models = [
+        model for partial_results in results for model in partial_results["models"]
+    ]
     return models
 
 

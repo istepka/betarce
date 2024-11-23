@@ -11,7 +11,7 @@ from itertools import product
 import pandas as pd
 from tqdm import tqdm
 
-from .datasets import DatasetPreprocessor
+from .datasets import DatasetPreprocessor, Dataset
 from .experiments_utils import (
     get_B,
     train_B,
@@ -30,7 +30,7 @@ class Experiment:
         self.cfg = config
         self._setup()
 
-        if self.cfg_gen["pretrain"]:
+        if self.cfg_exp["pretrain"]:
             self.pretrain_classifiers()
 
         self.results_list = list()
@@ -44,16 +44,16 @@ class Experiment:
         e2e_explainers = self.cfg_exp["e2e_explainers"]
         posthoc_explainers = self.cfg_exp["posthoc_explainers"]
 
-        exps = {k: "e2e" for k in e2e_explainers} + {k: "base" for k in base_explainers}
+        exps = {k: "e2e" for k in e2e_explainers} | {k: "base" for k in base_explainers}
 
         all_combinations = []
-        for dataset in self.cfg_exp["datasets"]:
+        for dataset_name in self.cfg_exp["datasets"]:
             for fold in range(self.cfg_exp["cross_validation_folds"]):
                 for classifier in self.cfg_exp["classifiers"]:
                     for exp_type in self.cfg_exp["ex_types"]:
                         for explainer in exps.items():
                             all_combinations.append(
-                                (dataset, fold, classifier, exp_type, explainer)
+                                (dataset_name, fold, classifier, exp_type, explainer)
                             )
 
         total_iters = self.calculate_total_iterations(all_combinations)
@@ -62,16 +62,19 @@ class Experiment:
         pbar = tqdm(total=total_iters, desc="Global Iterations")
 
         for combination in all_combinations:
-            dataset, fold, classifier, exp_type, explainer = combination
+            dataset_name, fold, classifier, exp_type, explainer = combination
 
             is_base = explainer[1] == "base"
             is_e2e = explainer[1] == "e2e"
             explainer_name = explainer[0]
 
+            # Get dataset
+            dataset = Dataset(dataset_name, self.cfg_gen["random_seed"])
+
             # Get the preprocessor
             preprocessor = DatasetPreprocessor(
                 dataset=dataset,
-                cross_validation_folds=dataset,
+                cross_validation_folds=self.cfg_exp["cross_validation_folds"],
                 fold_idx=fold,
                 random_state=self.cfg_gen["random_seed"],
                 one_hot=True,
@@ -99,7 +102,7 @@ class Experiment:
                 1,
                 exp_type,
                 classifier,
-                dataset,
+                dataset_name,
                 fold,
             )
 
@@ -108,7 +111,7 @@ class Experiment:
                 self.cfg_exp["m2_count"],
                 exp_type,
                 classifier,
-                dataset,
+                dataset_name,
                 fold,
             )
 
@@ -116,15 +119,15 @@ class Experiment:
             explainer_hp = self.cfg[explainer_name]
             model1: BaseClassifier = models_m1[0]
             base_explainer = self.get_base_explainer(
-                X_train, y_train, explainer_name, explainer_hp, model1, preprocessor
+                X_train_pd, y_train, explainer_name, explainer_hp, model1, preprocessor
             )
 
             # select a subset of the test set
             x_test_size = self.cfg_exp["x_test_size"]
-            X_test_pd = X_test_pd.sample(x_test_size)
-            y_test = y_test[X_test_pd.index]
+            _X_test_pd = X_test_pd.reset_index(drop=True).sample(x_test_size)
+            _y_test = y_test[_X_test_pd.index]
 
-            for idx, (x, y) in enumerate(zip(X_test_pd, y_test)):
+            for idx, (x, y) in enumerate(zip(_X_test_pd, _y_test)):
                 logging.info(f"Global iteration: {self.global_iter}")
 
                 # Obtain the base cf
@@ -226,6 +229,10 @@ class Experiment:
                         record["robust_counterfactual_L2_distance_from_base"] = (
                             L2_dist_to_base
                         )
+
+                        # Add the artifacts to the record
+                        for k, v in artifacts_dict.items():
+                            record[k] = v
 
                         self.add_to_results(deepcopy(record))
 
@@ -420,7 +427,7 @@ class Experiment:
         Sample k models from the specified experiment type, classifier, dataset and fold
         """
         path = os.path.join(
-            self.cfg_gen["result_path"],
+            self.cfg_gen["model_path"],
             dataset,
             exp_type,
             classifier,
@@ -443,23 +450,28 @@ class Experiment:
         """
         With the given configuration, pretrain the classifiers and save them to the disk
         """
-        exp_types = self.cfg_gen["ex_types"]
+        exp_types = self.cfg_exp["ex_types"]
         datasets = self.cfg_exp["datasets"]
         folds = self.cfg_exp["cross_validation_folds"]
         classifiers = self.cfg_exp["classifiers"]
-        pretrainN = self.cfg_exp["pretrainN"]
+        pretrainN = self.cfg_exp["n_pretrain"]
 
         all_combinations = []
-        for dataset in datasets:
+        for dataset_name in datasets:
             for fold in range(folds):
                 for classifier in classifiers:
                     for exp_type in exp_types:
-                        all_combinations.append((dataset, fold, classifier, exp_type))
+                        all_combinations.append(
+                            (dataset_name, fold, classifier, exp_type)
+                        )
 
-        for dataset, fold, classifier, exp_type in all_combinations:
+        for dataset_name, fold, classifier, exp_type in all_combinations:
+            # Get dataset
+            dataset = Dataset(dataset_name, self.cfg_gen["random_seed"])
+
             preprocessor = DatasetPreprocessor(
                 dataset=dataset,
-                cross_validation_folds=dataset,
+                cross_validation_folds=self.cfg_exp["cross_validation_folds"],
                 fold_idx=fold,
                 random_state=self.cfg_gen["random_seed"],
                 one_hot=True,
@@ -489,6 +501,8 @@ class Experiment:
                 model_fixed_seed,
             )
 
+            print(seed_pool)
+
             models_pool = train_B(
                 ex_type=exp_type,
                 model_type_to_use=classifier,
@@ -497,7 +511,7 @@ class Experiment:
                 hparamsB=hparams_pool,
                 bootstrapB=bootstrap_pool,
                 k_mlps_in_B=pretrainN,
-                n_jobs=model_base_hp["n_jobs"],
+                n_jobs=model_base_hp["n_jobs"] if "n_jobs" in model_base_hp else 1,
                 X_train=X_train,
                 y_train=y_train,
                 X_test=X_test,
@@ -511,10 +525,7 @@ class Experiment:
             #           fold
             # filenames follow indices of the models in the pool
             # save the models
-
-            results_dir = self.cfg_gen["result_path"]
-
-            dataset_dir = os.path.join(results_dir, dataset)
+            dataset_dir = os.path.join(self.cfg_gen["model_path"], dataset_name)
             exp_type_dir = os.path.join(dataset_dir, exp_type)
             classifier_dir = os.path.join(exp_type_dir, classifier)
             fold_dir = os.path.join(classifier_dir, str(fold))
@@ -529,12 +540,12 @@ class Experiment:
         self.cfg_exp = self.cfg["experiments_setup"]
         self.cfg_mod_hp = self.cfg["model_hyperparameters"]
 
-        mm_dd = time.strftime("%m-%d")
+        mm_dd = time.strftime("%m-%d_%H-%M-%S")
         salted_hash = str(abs(hash(str(self.cfg))) + int(time.time()))[:5]
         prefix = f"{mm_dd}_{salted_hash}"
         self.cfg_gen["result_path"] = os.path.join(self.cfg_gen["result_path"], prefix)
-        self.cfg_gen["model_path"] = os.path.join(self.cfg_gen["model_path"], prefix)
         self.cfg_gen["log_path"] = os.path.join(self.cfg_gen["log_path"], prefix)
+        # self.cfg_gen["model_path"] = os.path.join(self.cfg_gen["model_path"])
 
         logging.debug(self.cfg)
 
