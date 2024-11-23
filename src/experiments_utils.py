@@ -25,6 +25,11 @@ from .classifiers.lgbmclassifier import (
     train_lgbm,
     train_K_LGBMS_in_parallel,
 )
+from .classifiers.lrclassifier import (
+    LogisticRegressionClassifier,
+    train_logistic_regression,
+    train_K_lrs_in_parallel,
+)
 from .classifiers.baseclassifier import BaseClassifier
 from .classifiers.utils import bootstrap_data
 from .explainers import (
@@ -52,6 +57,8 @@ def train_model(X_train, y_train, model_type: str, seed: int, hparams: dict) -> 
         m, pp, pc = train_decision_tree(X_train, y_train, seed, hparams)
     elif model_type == "lightgbm":
         m, pp, pc = train_lgbm(X_train, y_train, seed, hparams)
+    elif model_type == "logistic_regression":
+        m, pp, pc = train_logistic_regression(X_train, y_train, seed, hparams)
     else:
         raise ValueError(f"Unknown model type: {model_type}")
 
@@ -128,6 +135,25 @@ def train_B(
                 for partial_results in results
                 for model in partial_results["models"]
             ]
+        case "logistic_regression":
+            results = train_K_lrs_in_parallel(
+                X_train=X_train,
+                y_train=y_train,
+                X_test=X_test,
+                y_test=y_test,
+                hparamsB=hparamsB,
+                bootstrapB=bootstrapB,
+                seedB=seedB,
+                hparams_base=model_base_hyperparameters,
+                K=k_mlps_in_B,
+                n_jobs=n_jobs,
+            )
+            models = [
+                model
+                for partial_results in results
+                for model in partial_results["models"]
+            ]
+
         case _:
             raise ValueError("Unknown model type. Cannot train B models.")
 

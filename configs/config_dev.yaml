@@ -16,7 +16,7 @@ hydra:
 general:
   data_path: data/
   model_path: models/
-  result_path: results/july_test
+  result_path: results/dev_test
   log_path: logs/
   random_state: 345
   random_seed: 345
@@ -37,7 +37,7 @@ experiments_setup:
     # - "breast_cancer"
     # - "car_eval"
     - "rice"
-    - "diabetes"
+    # - "diabetes"
   beta_confidences:
     - 0.9
   delta_robustnesses:
@@ -142,6 +142,38 @@ model_hyperparameters:
       n_estimators: 30
       min_child_samples: 20
       subsample: 0.8
+    model_fixed_seed: 42
+
+
+  logistic_regression:
+    model_hyperparameters_pool:
+      C:
+        lower: 0.1
+        upper: 1
+        freq: 0.05
+      penalty:
+        - "l1"
+        - "l2"
+        - "elasticnet"
+        - null
+      max_iter:
+        lower: 50
+        upper: 200
+        freq: 10
+      solver:
+        - "liblinear"
+        - "lbfgs"
+        - "newton-cg"
+    model_base_hyperparameters:
+      verbose: 0
+      n_jobs: 1
+      classification_threshold: 0.5
+      seed: 42
+    model_fixed_hyperparameters:
+      C: 1
+      penalty: "l2"
+      max_iter: 100
+      solver: "lbfgs"
     model_fixed_seed: 42
       
 beta_rob:
