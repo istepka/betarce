@@ -226,6 +226,9 @@ class RobX(PostHocExplainer):
         self.X_train = X_train
         self.predict_proba_fn = predict_proba_fn
 
+    def prep(self) -> None:
+        pass
+
     def generate(
         self,
         start_instance: np.ndarray | pd.DataFrame,

@@ -15,7 +15,7 @@ hydra:
 
 general:
   data_path: data/
-  model_path: models/
+  model_path: models/23-11/
   result_path: results/dev_test
   log_path: logs/
   random_state: 345
@@ -25,13 +25,15 @@ general:
   save_every_n_iterations: 10
 
 experiments_setup:
+  pretrain: False
+  n_pretrain: 100
   base_explainers:
     - "gs"
-    - "dice"
-    - "face"
+    # - "dice"
+    # - "face"
   e2e_explainers:
-    - "roar"
-    - "rbr"
+    # - "roar"
+    # - "rbr"
   posthoc_explainers:
     - "betarob"
     - "robx"
@@ -58,10 +60,11 @@ experiments_setup:
     - "dpow"
   classifiers:
     - "neural_network"
-    - "lightgbm"
-    - "logistic_regression"
+    # - "lightgbm"
+    # - "logistic_regression"
   pretrain_N: 100
   just_base_cf: False
+  save_every: 10
   
 model_hyperparameters:
   neural_network:
@@ -193,7 +196,7 @@ betarob:
     delta:
       - 0.9
   fixed_hps:
-    growingSpheresHparams:
+    gs:
       max_iter: 100
       n_search_samples: 100
       p_norm: 2

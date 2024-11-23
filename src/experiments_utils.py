@@ -327,14 +327,13 @@ def check_is_none(to_check: object) -> bool:
     return False
 
 
-def is_robustness_achievable_for_params(
-    k: int, beta_confidence: float, delta_robustness: float
-) -> bool:
+def is_robustness_achievable_for_params(k: int, beta: float, delta: float) -> bool:
     """
     Check if with the given parameters the robustness is achievable.
     """
-    lb, _ = stats.beta.interval(beta_confidence, 0.5 + k, 0.5)
-    return lb > delta_robustness
+    # lb, _ = stats.beta.interval(beta, 0.5 + k, 0.5)
+    lb = stats.beta.ppf(1 - beta, 0.5 + k, 0.5)
+    return lb > delta
 
 
 def sample_architectures(n: int, hparams: dict) -> list[dict]:
