@@ -3,8 +3,9 @@ import pandas as pd
 import logging
 from scipy import stats
 
-from .explainers import BaseExplainer, GrowingSpheresExplainer
-from .datasets import Dataset, DatasetPreprocessor
+from .posthoc_explainer import PostHocExplainer
+from ..base import GrowingSpheresExplainer
+from ...datasets import Dataset, DatasetPreprocessor
 
 
 def prepare_growing_spheres(
@@ -41,7 +42,7 @@ def prep_done(func):
     return wrapper
 
 
-class BetaRob(BaseExplainer):
+class BetaRob(PostHocExplainer):
     # attributes
     dataset: Dataset
     preprocessor: DatasetPreprocessor
@@ -87,8 +88,9 @@ class BetaRob(BaseExplainer):
         self,
         start_instance: np.ndarray | pd.DataFrame,
         target_class: int,
-        delta_target: float,
-        beta_confidence: float,
+        delta: float,
+        beta: float,
+        **kwargs,
     ) -> np.ndarray:
         """
         Generate the counterfactual.
@@ -109,8 +111,8 @@ class BetaRob(BaseExplainer):
         # Prepare the function to optimize
         optimized_fn_crisp = lambda instance: self.__function_to_optimize(
             instance=instance,
-            delta_target=delta_target,
-            beta_confidence=beta_confidence,
+            delta_target=delta,
+            beta_confidence=beta,
         )
 
         # Prepare the Growing Spheres optimizer
@@ -124,10 +126,10 @@ class BetaRob(BaseExplainer):
         if optimized_fn_crisp(start_instance) == 1:
             artifact_dict["start_sample_passes_test"] = 1
             artifact_dict["highest_delta"] = self.__get_left_bound_beta(
-                start_instance, beta_confidence
+                start_instance, beta
             )
             artifact_dict["lower_bound_beta"], artifact_dict["upper_bound_beta"] = (
-                self.__get_credible_interval_bounds(start_instance, beta_confidence)
+                self.__get_credible_interval_bounds(start_instance, beta)
             )
             return start_instance, artifact_dict
 
@@ -159,10 +161,10 @@ class BetaRob(BaseExplainer):
             return None, artifact_dict
 
         artifact_dict["highest_delta"] = self.__get_left_bound_beta(
-            robust_counterfactual, beta_confidence
+            robust_counterfactual, beta
         )
         artifact_dict["lower_bound_beta"], artifact_dict["upper_bound_beta"] = (
-            self.__get_credible_interval_bounds(robust_counterfactual, beta_confidence)
+            self.__get_credible_interval_bounds(robust_counterfactual, beta)
         )
 
         return robust_counterfactual, artifact_dict

@@ -32,14 +32,14 @@ from .classifiers.lrclassifier import (
 )
 from .classifiers.baseclassifier import BaseClassifier
 from .classifiers.utils import bootstrap_data
-from .explainers import (
+from .explainers.base import (
     DiceExplainer,
     GrowingSpheresExplainer,
     BaseExplainer,
     CarlaExplainer,
     RBRExplainer,
 )
-from .betarob import BetaRob
+from .explainers.posthoc import BetaRob
 
 
 def get_config(path: str = "./config.yml") -> dict:
@@ -255,9 +255,7 @@ def base_counterfactual_generate(
     elif isinstance(base_explainer, RBRExplainer):
         return base_explainer.generate(instance)
     else:
-        raise ValueError(
-            "base_explainer must be either a DiceExplainer or a GrowingSpheresExplainer"
-        )
+        raise ValueError(f"Unknown base explainer type: {type(base_explainer)}")
 
 
 def betarce_generate(
