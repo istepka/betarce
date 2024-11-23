@@ -244,7 +244,7 @@ class RobX(PostHocExplainer):
         if len(start_instance.shape) > 1:
             start_instance = start_instance.flatten()
 
-        cf = robx_algorithm(
+        cf, _ = robx_algorithm(
             X_train=self.X_train,
             predict_class_proba_fn=self.predict_proba_fn,
             start_counterfactual=start_instance,
@@ -256,4 +256,4 @@ class RobX(PostHocExplainer):
             robx_lambda=robx_lambda,
         )
 
-        return cf
+        return cf, dict()

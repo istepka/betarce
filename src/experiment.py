@@ -8,6 +8,8 @@ import pandas as pd
 from sklearn.neighbors import NearestNeighbors
 from copy import deepcopy
 from itertools import product
+import pandas as pd
+from tqdm import tqdm
 
 from .datasets import DatasetPreprocessor
 from .experiments_utils import (
@@ -16,6 +18,7 @@ from .experiments_utils import (
     prepare_base_counterfactual_explainer,
     check_is_none,
     calculate_metrics,
+    is_robustness_achievable_for_params,
 )
 from .classifiers.baseclassifier import BaseClassifier
 from .explainers.base import BaseExplainer
@@ -52,6 +55,11 @@ class Experiment:
                             all_combinations.append(
                                 (dataset, fold, classifier, exp_type, explainer)
                             )
+
+        total_iters = self.calculate_total_iterations(all_combinations)
+        logging.info(f"Total iterations: {total_iters}")
+
+        pbar = tqdm(total=total_iters, desc="Global Iterations")
 
         for combination in all_combinations:
             dataset, fold, classifier, exp_type, explainer = combination
@@ -111,6 +119,11 @@ class Experiment:
                 X_train, y_train, explainer_name, explainer_hp, model1, preprocessor
             )
 
+            # select a subset of the test set
+            x_test_size = self.cfg_exp["x_test_size"]
+            X_test_pd = X_test_pd.sample(x_test_size)
+            y_test = y_test[X_test_pd.index]
+
             for idx, (x, y) in enumerate(zip(X_test_pd, y_test)):
                 logging.info(f"Global iteration: {self.global_iter}")
 
@@ -144,7 +157,9 @@ class Experiment:
 
                 self.add_to_results(deepcopy(record))
 
-                if is_e2e:
+                # Skip the posthoc explainer if the base explainer is None
+                # or if it is an end-to-end explainer
+                if is_e2e or check_is_none(b_cf):
                     continue
 
                 # Get the posthoc explainer hparams
@@ -164,13 +179,72 @@ class Experiment:
                     ph_fixed = self.cfg[ph_explainer_name]["fixed_hps"]
 
                     for ph_comb in ph_combs:
-                        rbcf = ph_explainer.generate(
-                            start_instance=b_cf,
-                            target_class=1 - model1.predict_crisp(x)[0],
-                            **(ph_comb | ph_fixed),
+                        if (
+                            ph_explainer_name == "betarob"
+                            and is_robustness_achievable_for_params(**ph_comb)
+                        ):
+                            logging.info("Skip BetaRob -- unachievable robustness")
+                            continue
+
+                        t0 = time.time()
+                        try:
+                            rb_cf, artifacts_dict = ph_explainer.generate(
+                                start_instance=b_cf,
+                                target_class=1 - model1.predict_crisp(x)[0],
+                                **(ph_comb | ph_fixed),
+                            )
+                            if check_is_none(rb_cf):
+                                rb_cf = None
+                            else:
+                                rb_cf = rb_cf.flatten()
+                        except Exception as e:
+                            logging.error(f"Posthoc CF not found: {e}")
+                            rb_cf = None
+                        rb_cf_time = time.time() - t0
+
+                        record = self.get_base_record(combination)
+                        if not check_is_none(rb_cf):
+                            record = record | self.get_m1_m2_records(
+                                model1,
+                                models_m2,
+                                x,
+                                y,
+                                rb_cf,
+                                "robust",
+                                nearest_neighbors_model,
+                                rb_cf_time,
+                            )
+                        record["posthoc_explainer"] = ph_explainer_name
+                        for k, v in ph_comb.items():
+                            record[k] = v
+
+                        L1_dist_to_base = np.linalg.norm(b_cf - rb_cf, ord=1)
+                        L2_dist_to_base = np.linalg.norm(b_cf - rb_cf, ord=2)
+                        record["robust_counterfactual_L1_distance_from_base"] = (
+                            L1_dist_to_base
+                        )
+                        record["robust_counterfactual_L2_distance_from_base"] = (
+                            L2_dist_to_base
                         )
 
-                    # self.global_iter += 1
+                        self.add_to_results(deepcopy(record))
+
+                        # Iterate the global iteration
+                        self.global_iter += 1
+                        pbar.update(1)
+
+    def calculate_total_iterations(self, all_combs) -> int:
+        c = len(all_combs)
+        x_test_size = self.cfg_exp["x_test_size"]
+        posthoc_explainers = self.cfg_exp["posthoc_explainers"]
+
+        hp_per_posthoc = 0
+        for ph_explainer_name in posthoc_explainers:
+            hp_per_posthoc += len(
+                self.generate_posthoc_hp_combinations(ph_explainer_name)
+            )
+
+        return c * x_test_size * hp_per_posthoc
 
     def add_to_results(self, record: dict) -> None:
         self.results_list.append(record)
