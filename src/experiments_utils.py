@@ -66,7 +66,7 @@ def train_model(X_train, y_train, model_type: str, seed: int, hparams: dict) -> 
 
 
 def train_B(
-    ex_type: str,
+    # ex_type: str,
     model_type_to_use: str,
     model_base_hyperparameters: dict,
     seedB: list[int],
@@ -88,7 +88,7 @@ def train_B(
         "bootstrapB": bootstrapB,
         "seedB": seedB,
         "hparams_base": model_base_hyperparameters,
-        "ex_type": ex_type,
+        # "ex_type": ex_type,
         "K": k_mlps_in_B,
         "n_jobs": n_jobs,
     }
@@ -182,7 +182,7 @@ def prepare_base_counterfactual_explainer(
             explainer.prep(method_to_use=base_cf_method)
         case "rbr":
             explainer = RBRExplainer(X_train.copy(), model)
-            explainer.prep()
+            explainer.prep(hparams)
         case _:
             raise ValueError(
                 "base_cf_method name not recognized. Make sure to set it in config"
@@ -356,9 +356,11 @@ def sample_architectures(n: int, hparams: dict) -> list[dict]:
                     architecture[_param] = np.random.randint(lower, upper + 1)
                 # Otherwise, they are floats
                 else:
-                    freq = _options["freq"]
-                    lower, upper, freq = float(lower), float(upper), int(freq)
-                    architecture[_param] = np.random.uniform(lower, upper, freq)
+                    resolution = _options["resolution"]
+                    print(lower, upper, resolution)
+                    architecture[_param] = np.random.choice(
+                        np.linspace(float(lower), float(upper), num=int(resolution))
+                    )
             else:
                 raise ValueError("Unknown hyperparameter type", _options, "for", _param)
         architectures.append(architecture)

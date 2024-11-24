@@ -358,7 +358,6 @@ def train_K_mlps_in_parallel(
     bootstrapB,
     seedB,
     hparams_base: dict,
-    ex_type: str,
     K: int,
     n_jobs: int = 4,
 ) -> list[dict]:

@@ -11,6 +11,7 @@ from copy import deepcopy
 from itertools import product
 import traceback
 from tqdm import tqdm
+import warnings
 
 from .datasets import DatasetPreprocessor, Dataset
 from .experiments_utils import (
@@ -24,6 +25,10 @@ from .experiments_utils import (
 from .classifiers.baseclassifier import BaseClassifier
 from .explainers.base import BaseExplainer
 from .explainers.posthoc import BetaRob, RobX, PostHocExplainer
+
+
+# Suppress specific warning category
+warnings.filterwarnings("ignore", category=UserWarning)
 
 
 class Experiment:
@@ -181,6 +186,7 @@ class Experiment:
                     # or if it is an end-to-end explainer
                     if is_e2e or check_is_none(b_cf):
                         self.global_iter += 1
+                        pbar.update(1)
                         continue
 
                     # Get the posthoc explainer hparams
@@ -260,6 +266,9 @@ class Experiment:
                             self.global_iter += 1
                             pbar.update(1)
 
+            self.save_results()
+        pbar.close()
+
     def calculate_total_iterations(self, all_combs) -> int:
         c = len(all_combs)
         x_test_size = self.cfg_exp["x_test_size"]
@@ -277,16 +286,28 @@ class Experiment:
         self.results_list.append(record)
 
         if len(self.results_list) % self.cfg_exp["save_every"] == 0:
-            df = pd.DataFrame(self.results_list)
-            df.to_feather(
-                os.path.join(
-                    self.cfg_gen["result_path"],
-                    "results",
-                    f"results_{self.global_iter}.feather",
-                )
-            )
+            self.save_results()
 
-            self.results_list = []
+    def save_results(self) -> None:
+        if len(self.results_list) == 0:
+            return
+
+        df = pd.DataFrame(self.results_list)
+        format = self.cfg_gen["save_format"]
+        path = os.path.join(
+            self.cfg_gen["result_path"],
+            "results",
+            f"results_{self.global_iter}.{format}",
+        )
+
+        if format == "csv":
+            df.to_csv(path)
+        elif format == "feather":
+            df.to_feather(path)
+        else:
+            raise ValueError(f"Unknown save format: {format}")
+
+        self.results_list = []
 
     def get_base_record(self, combination: tuple) -> dict:
         record = {
@@ -294,7 +315,7 @@ class Experiment:
             "fold_i": combination[1],
             "model_type_to_use": combination[2],
             "experiment_type": combination[3],
-            "base_cf_method": combination[4],
+            "base_cf_method": combination[4][0],
         }
         return record
 
@@ -524,9 +545,10 @@ class Experiment:
             )
 
             print(seed_pool)
+            print(hparams_pool)
+            print(bootstrap_pool)
 
             models_pool = train_B(
-                ex_type=exp_type,
                 model_type_to_use=classifier,
                 model_base_hyperparameters=model_base_hp,
                 seedB=seed_pool,
