@@ -69,7 +69,7 @@ class Experiment:
         total_iters = self.calculate_total_iterations(all_combinations)
         logging.info(f"Total iterations: {total_iters}")
 
-        pbar = tqdm(total=total_iters, desc="Global Iterations")
+        self.pbar = tqdm(total=total_iters, desc="Global Iterations")
 
         for combination in all_combinations:
             dataset_name, fold, classifier, exp_type, explainer = combination
@@ -109,8 +109,8 @@ class Experiment:
             )
 
             # Prepare the nearest neighbors model for the metrics
-            nearest_neighbors_model = NearestNeighbors(n_neighbors=20, n_jobs=1)
-            nearest_neighbors_model.fit(X_train)
+            self.nearest_neighbors_model = NearestNeighbors(n_neighbors=20, n_jobs=1)
+            self.nearest_neighbors_model.fit(X_train)
 
             # Get x_test_size M1 models
             models_m1 = self.sample_classifiers(
@@ -130,144 +130,171 @@ class Experiment:
                 fold,
             )
 
-            # Get the base explainer
-            explainer_hp = self.cfg[explainer_name]
-            model1: BaseClassifier = models_m1[0]
-            base_explainer = self.get_base_explainer(
-                X_train_pd, y_train, explainer_name, explainer_hp, model1, preprocessor
-            )
+            if is_e2e:
+                e2e_combs = self.get_e2e_combinations(explainer_name, self.cfg)
+            else:
+                e2e_combs = list(({}, {}))
 
-            # select a subset of the test set
-            x_test_size = self.cfg_exp["x_test_size"]
-            indices = np.random.choice(X_test.shape[0], x_test_size, replace=False)
+            for base_hp, base_hp_to_save in e2e_combs:
+                # Get the base explainer
+                base_hp = self.cfg[explainer_name]
+                model1: BaseClassifier = models_m1[0]
+                base_explainer = self.get_base_explainer(
+                    X_train_pd, y_train, explainer_name, base_hp, model1, preprocessor
+                )
 
-            for _i, idx in enumerate(indices):
-                for m2 in models_m2:
-                    # logging.info(f"Global iteration: {self.global_iter}")
+                # select a subset of the test set
+                x_test_size = self.cfg_exp["x_test_size"]
+                indices = np.random.choice(X_test.shape[0], x_test_size, replace=False)
 
-                    # Obtain the test sample
-                    x_np = X_test[idx]
-                    y = y_test[idx]
-                    x = pd.DataFrame(x_np.reshape(1, -1), columns=X_test_pd.columns)
+                for _i, idx in enumerate(indices):
+                    for m2 in models_m2:
+                        # logging.info(f"Global iteration: {self.global_iter}")
 
-                    # Obtain the base cf
-                    t0 = time.time()
-                    try:
-                        b_cf = base_explainer.generate(x)
-                        if check_is_none(b_cf):
+                        # Obtain the test sample
+                        x_np = X_test[idx]
+                        y = y_test[idx]
+                        x = pd.DataFrame(x_np.reshape(1, -1), columns=X_test_pd.columns)
+
+                        # Obtain the base cf
+                        t0 = time.time()
+                        try:
+                            b_cf = base_explainer.generate(x)
+                            if check_is_none(b_cf):
+                                b_cf = None
+                            else:
+                                b_cf = b_cf.flatten()
+                        except Exception as e:
+                            logging.error(f"Base CF not found: {e}")
+                            traceback.print_exc(file=sys.stderr)
                             b_cf = None
-                        else:
-                            b_cf = b_cf.flatten()
-                    except Exception as e:
-                        logging.error(f"Base CF not found: {e}")
-                        traceback.print_exc(file=sys.stderr)
-                        b_cf = None
-                    b_cf_time = time.time() - t0
+                        b_cf_time = time.time() - t0
 
-                    record = self.get_base_record(combination)
-                    if not check_is_none(b_cf):
-                        record = record | self.get_m1_m2_records(
-                            model1,
-                            m2,
-                            x,
-                            y,
-                            y_train,
-                            b_cf,
-                            "base",
-                            nearest_neighbors_model,
-                            b_cf_time,
-                        )
-                    record["is_base"] = is_base
-                    record["is_e2e"] = is_e2e
-
-                    self.add_to_results(deepcopy(record))
-
-                    # Skip the posthoc explainer if the base explainer is None
-                    # or if it is an end-to-end explainer
-                    if is_e2e or check_is_none(b_cf):
-                        self.global_iter += 1
-                        pbar.update(1)
-                        continue
-
-                    # Get the posthoc explainer hparams
-                    for ph_explainer_name in posthoc_explainers:
-                        # Get the posthoc explainer
-                        ph_explainer = self.get_posthoc_explainer(
-                            ph_explainer_name,
-                            preprocessor,
-                            model1,
-                            combination,
-                            class_thresh,
-                        )
-
-                        ph_combs = self.generate_posthoc_hp_combinations(
-                            ph_explainer_name
-                        )
-                        ph_fixed = self.cfg[ph_explainer_name]["fixed_hps"]
-
-                        for ph_comb in ph_combs:
-                            if (
-                                ph_explainer_name == "betarob"
-                                and not is_robustness_achievable_for_params(**ph_comb)
-                            ):
-                                logging.info("Skip BetaRob -- unachievable robustness")
-                                continue
-
-                            t0 = time.time()
-                            try:
-                                rb_cf, artifacts_dict = ph_explainer.generate(
-                                    start_instance=b_cf,
-                                    target_class=1 - model1.predict_crisp(x)[0],
-                                    **(ph_comb | ph_fixed),
-                                )
-                                if check_is_none(rb_cf):
-                                    rb_cf = None
-                                else:
-                                    rb_cf = rb_cf.flatten()
-                            except Exception as e:
-                                logging.error(f"Posthoc CF not found: {e}")
-                                traceback.print_exc(file=sys.stderr)
-                                rb_cf = None
-                            rb_cf_time = time.time() - t0
-
-                            record = self.get_base_record(combination)
-                            if not check_is_none(rb_cf):
-                                record = record | self.get_m1_m2_records(
-                                    model1,
-                                    m2,
-                                    x,
-                                    y,
-                                    y_train,
-                                    rb_cf,
-                                    "robust",
-                                    nearest_neighbors_model,
-                                    rb_cf_time,
-                                )
-                            record["posthoc_explainer"] = ph_explainer_name
-                            for k, v in ph_comb.items():
-                                record[k] = v
-
-                            L1_dist_to_base = np.sum(np.abs(b_cf - rb_cf))
-                            L2_dist_to_base = np.sqrt(np.sum(np.square(b_cf - rb_cf)))
-                            record["robust_counterfactual_L1_distance_from_base"] = (
-                                L1_dist_to_base
+                        base_record = self.get_base_record(combination)
+                        if not check_is_none(b_cf):
+                            base_record = base_record | self.get_m1_m2_records(
+                                model1,
+                                m2,
+                                x,
+                                y,
+                                y_train,
+                                b_cf,
+                                "base",
+                                b_cf_time,
                             )
-                            record["robust_counterfactual_L2_distance_from_base"] = (
-                                L2_dist_to_base
-                            )
+                        base_record["is_base"] = is_base
+                        base_record["is_e2e"] = is_e2e
 
-                            # Add the artifacts to the record
-                            for k, v in artifacts_dict.items():
-                                record[k] = v
+                        if is_e2e:
+                            base_record = base_record | base_hp_to_save
 
-                            self.add_to_results(deepcopy(record))
+                        self.add_to_results(deepcopy(base_record))
 
-                            # Iterate the global iteration
+                        # Skip the posthoc explainer if the base explainer is None
+                        # or if it is an end-to-end explainer
+                        if is_e2e or check_is_none(b_cf):
                             self.global_iter += 1
-                            pbar.update(1)
+                            self.pbar.update(1)
+                            continue
+
+                        # Get the posthoc explainer hparams
+                        for ph_explainer_name in posthoc_explainers:
+                            self.robust_part(
+                                ph_explainer_name,
+                                combination,
+                                preprocessor,
+                                model1,
+                                m2,
+                                x,
+                                y,
+                                y_train,
+                                b_cf,
+                                class_thresh,
+                                base_record,
+                            )
 
             self.save_results()
-        pbar.close()
+        self.pbar.close()
+
+    def robust_part(
+        self,
+        ph_explainer_name,
+        combination,
+        preprocessor,
+        model1,
+        m2,
+        x,
+        y,
+        y_train,
+        b_cf,
+        class_thresh,
+        base_record,
+    ):
+        # Get the posthoc explainer
+        ph_explainer = self.get_posthoc_explainer(
+            ph_explainer_name,
+            preprocessor,
+            model1,
+            combination,
+            class_thresh,
+        )
+
+        ph_combs = self.generate_posthoc_hp_combinations(ph_explainer_name)
+        ph_fixed = self.cfg[ph_explainer_name]["fixed_hps"]
+
+        for ph_comb in ph_combs:
+            if ph_explainer_name == "betarob" and not is_robustness_achievable_for_params(
+                **ph_comb
+            ):
+                logging.info("Skip BetaRob -- unachievable robustness")
+                continue
+
+            t0 = time.time()
+            try:
+                rb_cf, artifacts_dict = ph_explainer.generate(
+                    start_instance=b_cf,
+                    target_class=1 - model1.predict_crisp(x)[0],
+                    **(ph_comb | ph_fixed),
+                )
+                if check_is_none(rb_cf):
+                    rb_cf = None
+                else:
+                    rb_cf = rb_cf.flatten()
+            except Exception as e:
+                logging.error(f"Posthoc CF not found: {e}")
+                traceback.print_exc(file=sys.stderr)
+                rb_cf = None
+            rb_cf_time = time.time() - t0
+
+            if not check_is_none(rb_cf):
+                rb_record = base_record | self.get_m1_m2_records(
+                    model1,
+                    m2,
+                    x,
+                    y,
+                    y_train,
+                    rb_cf,
+                    "robust",
+                    rb_cf_time,
+                )
+            rb_record["posthoc_explainer"] = ph_explainer_name
+            for k, v in ph_comb.items():
+                rb_record[k] = v
+
+            L1_dist_to_base = np.sum(np.abs(b_cf - rb_cf))
+            L2_dist_to_base = np.sqrt(np.sum(np.square(b_cf - rb_cf)))
+            rb_record["robust_counterfactual_L1_distance_from_base"] = L1_dist_to_base
+            rb_record["robust_counterfactual_L2_distance_from_base"] = L2_dist_to_base
+
+            # Add the artifacts to the record
+            for k, v in artifacts_dict.items():
+                rb_record[k] = v
+
+            self.add_to_results(deepcopy(rb_record))
+
+            # Iterate the global iteration
+            self.global_iter += 1
+            self.pbar.update(1)
 
     def calculate_total_iterations(self, all_combs) -> int:
         c = len(all_combs)
@@ -276,11 +303,16 @@ class Experiment:
 
         hp_per_posthoc = 0
         for ph_explainer_name in posthoc_explainers:
-            hp_per_posthoc += len(
-                self.generate_posthoc_hp_combinations(ph_explainer_name)
-            )
+            hp_per_posthoc += len(self.generate_posthoc_hp_combinations(ph_explainer_name))
 
-        return c * x_test_size * hp_per_posthoc
+        m2_count = self.cfg_exp["m2_count"]
+
+        hp_per_e2e = 0
+        if self.cfg_exp["e2e_explainers"] is not None:
+            for explainer in self.cfg_exp["e2e_explainers"]:
+                hp_per_e2e += len(self.get_e2e_combinations(explainer, self.cfg))
+
+        return c * x_test_size * m2_count * (hp_per_posthoc + hp_per_e2e)
 
     def add_to_results(self, record: dict) -> None:
         self.results_list.append(record)
@@ -328,7 +360,6 @@ class Experiment:
         y_train: np.ndarray,
         cf: np.ndarray,
         cf_prefix: str,
-        nn: NearestNeighbors,
         time_taken: float,
     ) -> dict:
         m1_pred_proba = m1.predict_proba(x)[0]
@@ -365,7 +396,7 @@ class Experiment:
             cf_desired_class=cf_target_class,
             x=x.values.flatten(),
             y_train=y_train,
-            nearest_neighbors_model=nn,
+            nearest_neighbors_model=self.nearest_neighbors_model,
             predict_fn_crisp=m1.predict_crisp,
         )
 
@@ -504,9 +535,7 @@ class Experiment:
             for fold in range(folds):
                 for classifier in classifiers:
                     for exp_type in exp_types:
-                        all_combinations.append(
-                            (dataset_name, fold, classifier, exp_type)
-                        )
+                        all_combinations.append((dataset_name, fold, classifier, exp_type))
 
         for dataset_name, fold, classifier, exp_type in all_combinations:
             # Get dataset
@@ -578,6 +607,65 @@ class Experiment:
             for idx, model in enumerate(models_pool):
                 model_path = os.path.join(fold_dir, f"model_{idx}.joblib")
                 joblib.dump(model, model_path)
+
+    def get_e2e_combinations(self, base_cf_method: str, config: dict) -> list:
+        if base_cf_method == "roar":
+            hparams = config["roar"]
+            all_combinations = []
+            for dmx in hparams["delta_max"]:
+                for lr in hparams["lr"]:
+                    for norm in hparams["norm"]:
+                        _base = deepcopy(hparams)
+                        _base["delta_max"] = dmx
+                        _base["lr"] = lr
+                        _base["norm"] = norm
+                        hparams_to_save = _base.copy()
+                        all_combinations.append((_base, hparams_to_save))
+        elif base_cf_method == "rbr":
+            hparams: dict = config["rbr"]
+            all_combinations = []
+            for pr in hparams["perturb_radius"]["synthesis"]:
+                for dp in hparams["ec"]["rbr_params"]["delta_plus"]:
+                    for s in hparams["ec"]["rbr_params"]["sigma"]:
+                        _base = deepcopy(hparams)
+                        _base["perturb_radius"]["synthesis"] = pr
+                        _base["ec"]["rbr_params"]["delta_plus"] = dp
+                        _base["ec"]["rbr_params"]["sigma"] = s
+                        hparams_to_save = {
+                            "perturb_radius": pr,
+                            "delta_plus": dp,
+                            "sigma": s,
+                        }
+                        all_combinations.append((_base, hparams_to_save))
+        elif base_cf_method == "face":
+            hparams = config["face"]
+            all_combinations = []
+            for f in hparams["fraction"]:
+                for m in hparams["mode"]:
+                    _base = deepcopy(hparams)
+                    _base["fraction"] = f
+                    _base["mode"] = m
+                    hp_to_save = _base.copy()
+                    all_combinations.append((_base, hp_to_save))
+        elif base_cf_method == "gs":
+            hparams = config["gs"]
+            all_combinations = [(hparams, hparams)]
+        elif base_cf_method == "dice":
+            hparams = config["dice"]
+            all_combinations = []
+            for pw in hparams["proximity_weight"]:
+                for dw in hparams["diversity_weight"]:
+                    for ct in hparams["sparsity_weight"]:
+                        _base = deepcopy(hparams)
+                        _base["proximity_weight"] = pw
+                        _base["diversity_weight"] = dw
+                        _base["sparsity_weight"] = ct
+                        hparams_to_save = _base.copy()
+                        all_combinations.append((_base, hparams_to_save))
+        else:
+            raise ValueError("Unknown base counterfactual method")
+
+        return all_combinations
 
     def _setup(self) -> None:
         self.cfg_gen = self.cfg["general"]
