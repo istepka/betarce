@@ -27,7 +27,7 @@ general:
 
 experiments_setup:
   pretrain: True
-  n_pretrain: 100
+  n_pretrain: 50
   base_explainers:
     - "gs"
     - "dice"
@@ -64,7 +64,7 @@ experiments_setup:
     - "lightgbm"
     - "logistic_regression"
   pretrain_N: 100
-  save_every: 500
+  save_every: 1000
   
 model_hyperparameters:
   neural_network:

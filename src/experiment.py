@@ -133,11 +133,15 @@ class Experiment:
             if is_e2e:
                 e2e_combs = self.get_e2e_combinations(explainer_name, self.cfg)
             else:
-                e2e_combs = list(({}, {}))
+                e2e_combs = [({}, {})]
+
+            logging.info(f"Combination: {combination}")
 
             for base_hp, base_hp_to_save in e2e_combs:
                 # Get the base explainer
-                base_hp = self.cfg[explainer_name]
+                if not is_e2e:
+                    base_hp = self.cfg[explainer_name]
+
                 model1: BaseClassifier = models_m1[0]
                 base_explainer = self.get_base_explainer(
                     X_train_pd, y_train, explainer_name, base_hp, model1, preprocessor
@@ -243,8 +247,9 @@ class Experiment:
         ph_fixed = self.cfg[ph_explainer_name]["fixed_hps"]
 
         for ph_comb in ph_combs:
-            if ph_explainer_name == "betarob" and not is_robustness_achievable_for_params(
-                **ph_comb
+            if (
+                ph_explainer_name == "betarob"
+                and not is_robustness_achievable_for_params(**ph_comb)
             ):
                 logging.info("Skip BetaRob -- unachievable robustness")
                 continue
@@ -303,7 +308,9 @@ class Experiment:
 
         hp_per_posthoc = 0
         for ph_explainer_name in posthoc_explainers:
-            hp_per_posthoc += len(self.generate_posthoc_hp_combinations(ph_explainer_name))
+            hp_per_posthoc += len(
+                self.generate_posthoc_hp_combinations(ph_explainer_name)
+            )
 
         m2_count = self.cfg_exp["m2_count"]
 
@@ -510,6 +517,10 @@ class Experiment:
         # discover the models
         filenames = os.listdir(path)
 
+        np.random.seed(
+            self.cfg_gen["random_seed"]
+        )  # TODO: this is temporary to always get the same models
+
         # sample k models
         sampled_models = np.random.choice(filenames, k, replace=False)
 
@@ -535,7 +546,9 @@ class Experiment:
             for fold in range(folds):
                 for classifier in classifiers:
                     for exp_type in exp_types:
-                        all_combinations.append((dataset_name, fold, classifier, exp_type))
+                        all_combinations.append(
+                            (dataset_name, fold, classifier, exp_type)
+                        )
 
         for dataset_name, fold, classifier, exp_type in all_combinations:
             # Get dataset
