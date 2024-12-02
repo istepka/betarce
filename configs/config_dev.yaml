@@ -50,7 +50,7 @@ experiments_setup:
     # - "car_eval"
     - "rice"
     # - "diabetes"
-  x_test_size: 10
+  x_test_size: 3
   m2_count: 4
   cross_validation_folds: 3
   metrics_to_calculate:
@@ -65,7 +65,7 @@ experiments_setup:
     - "logistic_regression"
   pretrain_N: 100
   just_base_cf: False
-  save_every: 10
+  save_every: 50
   
 model_hyperparameters:
   neural_network:

@@ -42,6 +42,8 @@ class Experiment:
         self.results_list = list()
         self.global_iter = 0
 
+        logging.info(f"Config: {self.cfg}")
+
     def run(self) -> None:
         """
         Run the experiment
@@ -290,6 +292,8 @@ class Experiment:
             L2_dist_to_base = np.sqrt(np.sum(np.square(b_cf - rb_cf)))
             rb_record["robust_counterfactual_L1_distance_from_base"] = L1_dist_to_base
             rb_record["robust_counterfactual_L2_distance_from_base"] = L2_dist_to_base
+
+            rb_record["robust_cf_method"] = ph_explainer_name
 
             # Add the artifacts to the record
             for k, v in artifacts_dict.items():
