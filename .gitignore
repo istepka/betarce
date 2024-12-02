@@ -4,6 +4,7 @@
 wandb/
 slurm_*
 
+kdd/
 aaai_experiments/
 bash_scripts/aaai/*
 
