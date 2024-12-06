@@ -16,6 +16,10 @@ outputs/
 multirun/
 
 images/random
+images/paper/*.pdf
+images/paper/*.gif
+images/paper/*.mp4
+images/paper/*.webm
 
 *_local*
 logs*/
