@@ -1,5 +1,6 @@
 ## Counterfactual Explanations with Probabilistic Guarantees on their Robustness to Model Change
 
+This repository contains the code for BetaRCE method.
 
 ### Setup
 
@@ -60,7 +61,7 @@ Scripts for running experiments are located in `experiments` folder.
 If you find this work useful, please cite it as:
 ```
 @inproceedings{stepka2025,
-        author    = {Ignacy Stępka and Mateusz Lango and Jerzy Stefanowski},
+        author    = {Ignacy St\k{e}pka and Mateusz Lango and Jerzy Stefanowski},
         title     = {Counterfactual Explanations with Probabilistic Guarantees on their Robustness to Model Change},
         booktitle = {Proceedings of the 31st SIGKDD Conference on Knowledge Discovery and Data Mining},
         year      = {2025},
