@@ -1,60 +1,71 @@
 defaults:
-  - override hydra/launcher: joblib
-  # - override hydra/launcher: submitit_slurm
+  # - override hydra/launcher: joblib
+  - override hydra/launcher: submitit_slurm
 
 hydra:
   launcher:
     # JOBLIB max jobs
-    n_jobs: 10
+    # n_jobs: 10
 
     # SLURM
-    # cpus_per_task: 4
-    # mem_per_cpu: 4G
-    # timeout_min: 10080
-    # partition: obl
+    cpus_per_task: 1
+    mem_per_cpu: 6G
+    timeout_min: 10080
+    partition: obl
 
 
 general:
   data_path: data/
-  model_path: /home/inf148179/robust-cf/kdd/models/
-  result_path: /home/inf148179/robust-cf/kdd/results/
-  log_path: /home/inf148179/robust-cf/kdd/logs/
-  random_state: 123
-  random_seed: 123
+  model_path: kdd/models/
+  result_path: kdd/results/
+  log_path: kdd/logs/
+  save_format: feather
+  random_state: 345
+  random_seed: 345
   logging_level: INFO
   n_jobs: 1
-  save_every_n_iterations: 100
 
 experiments_setup:
-  robust_cf_method: "robx" # robx or betarob
+  pretrain: True
+  n_pretrain: 50
+  base_explainers:
+    - "gs"
+    - "dice"
+    - "face"
+  e2e_explainers:
+    - "roar"
+    - "rbr"
+  posthoc_explainers:
+    - "betarob"
+    - "robx"
   ex_types:
     - "Architecture"
-    - "Bootstrap"
     - "Seed"
+    - "Bootstrap"
   perform_generalizations: False
   datasets:
-    - "breast_cancer"
-    - "wine_quality"
-    - "diabetes"
     - "fico"
-  beta_confidences:
-    - 0.95
-  delta_robustnesses:
-    - 0.9
-  x_test_size: 50
-  m_count_per_experiment: 30
+    - "wine_quality"
+    - "breast_cancer"
+    - "car_eval"
+    - "rice"
+    - "diabetes"
+  x_test_size: 30
+  m2_count: 30
   cross_validation_folds: 3
-  base_counterfactual_method: "gs" # - "dice"
   metrics_to_calculate:
     - "validity"
     - "proximityL1"
     - "proximityL2"
     - "plausibility"
     - "dpow"
-  model_type_to_use:  "neural_network" # - "random_forest"
-  just_base_cf: False
+  classifiers:
+    - "neural_network"
+    - "lightgbm"
+    - "logistic_regression"
+  pretrain_N: 100
+  save_every: 1000
   
-
 model_hyperparameters:
   neural_network:
     model_hyperparameters_pool:
@@ -62,7 +73,7 @@ model_hyperparameters:
         lower: 3
         upper: 5
       neurons_per_layer:
-        lower: 64
+        lower: 32
         upper: 256
       activation:
         - "relu"
@@ -84,39 +95,112 @@ model_hyperparameters:
       dropout: 0.4
       classification_threshold: 0.5  
 
-  random_forest:
+  decision_tree:
     model_hyperparameters_pool:
-      n_estimators:
-        - 25
-        - 50
-        - 75
-        - 100
-        - 125
-        - 150
-        - 175
-        - 200
       max_depth:
-        - 8
-        - 10
-        - 12
-        - 14
-        - 16
-        - 18
-        - 20
+        lower: 5
+        upper: 10
+      min_samples_split:
+        lower: 2
+        upper: 5
+      min_samples_leaf:
+        lower: 1
+        upper: 4
+      criterion:
+        - "gini"
+        - "entropy"
+        - "log_loss"
+      max_features:
+        - "sqrt"
+        - "log2"
     model_fixed_hyperparameters:
-      n_estimators: 100
-      max_depth: 10
+      max_depth: 8
+      min_samples_split: 2
+      min_samples_leaf: 1
+      criterion: "gini"
+      max_features: "sqrt"
+    model_fixed_seed: 42
+    model_base_hyperparameters:
+      criterion: "gini"
+      verbose: 0
+      n_jobs: 1
+      seed: 42
+      classification_threshold: 0.5
+
+  lightgbm:
+    model_hyperparameters_pool:
+      num_leaves:
+        lower: 10
+        upper: 20
+      n_estimators:
+        lower: 15
+        upper: 40
+      min_child_samples:
+        lower: 10
+        upper: 20
+      subsample:
+        lower: 0.5
+        upper: 1
+        resolution: 10
+    model_base_hyperparameters:
+      objective: "binary"
+      verbose: -1
+      seed: 42
+      classification_threshold: 0.5
+      n_jobs: 4
+    model_fixed_hyperparameters:
+      num_leaves: 15
+      n_estimators: 30
+      min_child_samples: 20
+      subsample: 0.8
     model_fixed_seed: 42
 
-beta_rob:
-  k_mlps_in_B: 
-    - 32
-  growingSpheresHparams:
-    max_iter: 100
-    n_search_samples: 100
-    p_norm: 2
-    step: 0.1
-    target_proba: 0.5
+
+  logistic_regression:
+    model_hyperparameters_pool:
+      C:
+        lower: 0.1
+        upper: 1.0
+        resolution: 10
+      penalty:
+        - "l2"
+        - null
+      max_iter:
+        lower: 50
+        upper: 200
+        resolution: 10
+      solver:
+        - "lbfgs"
+        - "newton-cg"
+        - "sag"
+    model_base_hyperparameters:
+      verbose: 0
+      n_jobs: 1
+      classification_threshold: 0.5
+      seed: 42
+    model_fixed_hyperparameters:
+      C: 1
+      penalty: "l2"
+      max_iter: 100
+      solver: "lbfgs"
+    model_fixed_seed: 42
+      
+betarob:
+  pool_hps:
+    k: 
+      - 32
+    beta:
+      - 0.9
+    delta:
+      - 0.8
+      - 0.9
+  fixed_hps:
+    gs:
+      max_iter: 100
+      n_search_samples: 100
+      p_norm: 2
+      step: 0.1
+      target_proba: 0.5
 
 gs:
   max_iter: 100
@@ -126,15 +210,14 @@ gs:
   target_proba: 0.5
 
 robx:
-  taus:
-    - 0.4 
-    - 0.5
-    - 0.6
-    - 0.7
-    - 0.8
-  variances: 
-    - 0.01
-  N: 1000
+  pool_hps:
+    tau: 
+      - 0.5
+    variance: 
+      - 0.1
+      - 0.01
+  fixed_hps:
+    N: 1000
 
 roar:
   delta_max: [0.01, 0.05, 0.1]

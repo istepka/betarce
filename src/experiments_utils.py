@@ -4,37 +4,42 @@ import numpy as np
 from scipy import stats
 from sklearn.neighbors import NearestNeighbors
 
-from datasets import Dataset, DatasetPreprocessor
-from classifiers.mlpclassifier import (
+from .datasets import Dataset, DatasetPreprocessor
+from .classifiers.mlpclassifier import (
     MLPClassifier,
     train_neural_network,
     train_K_mlps_in_parallel,
 )
-from classifiers.rfclassifier import (
+from .classifiers.rfclassifier import (
     RFClassifier,
     train_random_forest,
     train_K_rfs_in_parallel,
 )
-from classifiers.dtclassifier import (
+from .classifiers.dtclassifier import (
     DecisionTree,
     train_decision_tree,
     train_K_dts_in_parallel,
 )
-from classifiers.lgbmclassifier import (
+from .classifiers.lgbmclassifier import (
     LGBMClassifier,
     train_lgbm,
     train_K_LGBMS_in_parallel,
 )
-from classifiers.baseclassifier import BaseClassifier
-from classifiers.utils import bootstrap_data
-from explainers import (
+from .classifiers.lrclassifier import (
+    LogisticRegressionClassifier,
+    train_logistic_regression,
+    train_K_lrs_in_parallel,
+)
+from .classifiers.baseclassifier import BaseClassifier
+from .classifiers.utils import bootstrap_data
+from .explainers.base import (
     DiceExplainer,
     GrowingSpheresExplainer,
     BaseExplainer,
     CarlaExplainer,
     RBRExplainer,
 )
-from betarob import BetaRob
+from .explainers.posthoc import BetaRob
 
 
 def get_config(path: str = "./config.yml") -> dict:
@@ -52,6 +57,8 @@ def train_model(X_train, y_train, model_type: str, seed: int, hparams: dict) -> 
         m, pp, pc = train_decision_tree(X_train, y_train, seed, hparams)
     elif model_type == "lightgbm":
         m, pp, pc = train_lgbm(X_train, y_train, seed, hparams)
+    elif model_type == "logistic_regression":
+        m, pp, pc = train_logistic_regression(X_train, y_train, seed, hparams)
     else:
         raise ValueError(f"Unknown model type: {model_type}")
 
@@ -59,7 +66,7 @@ def train_model(X_train, y_train, model_type: str, seed: int, hparams: dict) -> 
 
 
 def train_B(
-    ex_type: str,
+    # ex_type: str,
     model_type_to_use: str,
     model_base_hyperparameters: dict,
     seedB: list[int],
@@ -72,65 +79,34 @@ def train_B(
     X_test: pd.DataFrame,
     y_test: pd.Series,
 ) -> list:
+    kwargs = {
+        "X_train": X_train,
+        "y_train": y_train,
+        "X_test": X_test,
+        "y_test": y_test,
+        "hparamsB": hparamsB,
+        "bootstrapB": bootstrapB,
+        "seedB": seedB,
+        "hparams_base": model_base_hyperparameters,
+        # "ex_type": ex_type,
+        "K": k_mlps_in_B,
+        "n_jobs": n_jobs,
+    }
+
     match model_type_to_use:
         case "neural_network":
-            results = train_K_mlps_in_parallel(
-                X_train=X_train,
-                y_train=y_train,
-                X_test=X_test,
-                y_test=y_test,
-                hparamsB=hparamsB,
-                bootstrapB=bootstrapB,
-                seedB=seedB,
-                hparams_base=model_base_hyperparameters,
-                ex_type=ex_type,
-                K=k_mlps_in_B,
-                n_jobs=n_jobs,
-            )
-            models = [
-                model
-                for partial_results in results
-                for model in partial_results["models"]
-            ]
+            results = train_K_mlps_in_parallel(**kwargs)
         case "decision_tree":
-            results = train_K_dts_in_parallel(
-                X_train=X_train,
-                y_train=y_train,
-                X_test=X_test,
-                y_test=y_test,
-                hparamsB=hparamsB,
-                bootstrapB=bootstrapB,
-                seedB=seedB,
-                hparams_base=model_base_hyperparameters,
-                K=k_mlps_in_B,
-                n_jobs=n_jobs,
-            )
-            models = [
-                model
-                for partial_results in results
-                for model in partial_results["models"]
-            ]
+            results = train_K_dts_in_parallel(**kwargs)
         case "lightgbm":
-            results = train_K_LGBMS_in_parallel(
-                X_train=X_train,
-                y_train=y_train,
-                X_test=X_test,
-                y_test=y_test,
-                hparamsB=hparamsB,
-                bootstrapB=bootstrapB,
-                seedB=seedB,
-                hparams_base=model_base_hyperparameters,
-                K=k_mlps_in_B,
-                n_jobs=n_jobs,
-            )
-            models = [
-                model
-                for partial_results in results
-                for model in partial_results["models"]
-            ]
+            results = train_K_LGBMS_in_parallel(**kwargs)
+        case "logistic_regression":
+            results = train_K_lrs_in_parallel(**kwargs)
         case _:
             raise ValueError("Unknown model type. Cannot train B models.")
-
+    models = [
+        model for partial_results in results for model in partial_results["models"]
+    ]
     return models
 
 
@@ -206,7 +182,7 @@ def prepare_base_counterfactual_explainer(
             explainer.prep(method_to_use=base_cf_method)
         case "rbr":
             explainer = RBRExplainer(X_train.copy(), model)
-            explainer.prep()
+            explainer.prep(hparams)
         case _:
             raise ValueError(
                 "base_cf_method name not recognized. Make sure to set it in config"
@@ -229,9 +205,7 @@ def base_counterfactual_generate(
     elif isinstance(base_explainer, RBRExplainer):
         return base_explainer.generate(instance)
     else:
-        raise ValueError(
-            "base_explainer must be either a DiceExplainer or a GrowingSpheresExplainer"
-        )
+        raise ValueError(f"Unknown base explainer type: {type(base_explainer)}")
 
 
 def betarce_generate(
@@ -353,14 +327,13 @@ def check_is_none(to_check: object) -> bool:
     return False
 
 
-def is_robustness_achievable_for_params(
-    k: int, beta_confidence: float, delta_robustness: float
-) -> bool:
+def is_robustness_achievable_for_params(k: int, beta: float, delta: float) -> bool:
     """
     Check if with the given parameters the robustness is achievable.
     """
-    lb, _ = stats.beta.interval(beta_confidence, 0.5 + k, 0.5)
-    return lb > delta_robustness
+    # lb, _ = stats.beta.interval(beta, 0.5 + k, 0.5)
+    lb = stats.beta.ppf(1 - beta, 0.5 + k, 0.5)
+    return lb > delta
 
 
 def sample_architectures(n: int, hparams: dict) -> list[dict]:
@@ -383,9 +356,11 @@ def sample_architectures(n: int, hparams: dict) -> list[dict]:
                     architecture[_param] = np.random.randint(lower, upper + 1)
                 # Otherwise, they are floats
                 else:
-                    freq = _options["freq"]
-                    lower, upper, freq = float(lower), float(upper), int(freq)
-                    architecture[_param] = np.random.uniform(lower, upper, freq)
+                    resolution = _options["resolution"]
+                    print(lower, upper, resolution)
+                    architecture[_param] = np.random.choice(
+                        np.linspace(float(lower), float(upper), num=int(resolution))
+                    )
             else:
                 raise ValueError("Unknown hyperparameter type", _options, "for", _param)
         architectures.append(architecture)

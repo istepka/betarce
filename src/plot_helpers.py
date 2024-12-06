@@ -7,8 +7,8 @@ from tqdm import tqdm
 from matplotlib.gridspec import GridSpec
 from sklearn.calibration import CalibratedClassifierCV, CalibrationDisplay
 
-from scikit_models import scikit_predict_proba, scikit_predict_proba_fn
-from robx import counterfactual_stability, counterfactual_stability_test
+# from scikit_models import scikit_predict_proba, scikit_predict_proba_fn
+from .robx import counterfactual_stability, counterfactual_stability_test
 
 
 def __save_plot(plot: object, save_path: str, dpi: int = 300) -> None:

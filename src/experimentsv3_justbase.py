@@ -9,7 +9,7 @@ from copy import deepcopy
 from sklearn.neighbors import NearestNeighbors
 
 # Project imports
-from experiments_utils import *
+from .experiments_utils import *
           
 def experiment(config: dict):
     

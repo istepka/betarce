@@ -5,8 +5,8 @@ import pandas as pd
 from numpy import linalg as LA
 from .base_explainer import BaseExplainer
 
-def hyper_sphere_coordindates(n_search_samples, instance, high, low, p_norm=2):
 
+def hyper_sphere_coordindates(n_search_samples, instance, high, low, p_norm=2):
     # Implementation follows the Random Point Picking over a sphere
     # The algorithm's implementation follows: Pawelczyk, Broelemann & Kascneci (2020);
     # "Learning Counterfactual Explanations for Tabular Data" -- The Web Conference 2020 (WWW)
@@ -36,6 +36,7 @@ def hyper_sphere_coordindates(n_search_samples, instance, high, low, p_norm=2):
 
     return candidate_counterfactuals, dist
 
+
 def growing_spheres_search(
     instance,
     keys_mutable,
@@ -49,7 +50,6 @@ def growing_spheres_search(
     step=0.2,
     max_iter=1000,
 ):
-
     """
     :param instance: df
     :param step: float > 0; step_size for growing spheres
@@ -65,11 +65,11 @@ def growing_spheres_search(
     # correct order of names
     keys_correct = feature_order
     # divide up keys
-    
+
     # THIS IMPLEMENTATION IS NOT DETERMINISTIC!!!!
     # keys_mutable_continuous = list(set(keys_mutable) - set(binary_cols))
     # keys_mutable_binary = list(set(keys_mutable) - set(continuous_cols))
-    
+
     # DETEMINISTIC IMPLEMENTATION
     keys_mutable_continuous = [k for k in keys_mutable if k not in binary_cols]
     keys_mutable_binary = [k for k in keys_mutable if k not in continuous_cols]
@@ -87,7 +87,7 @@ def growing_spheres_search(
         n_search_samples,
         axis=0,
     )
-    
+
     # init step size for growing the sphere
     low = 0
     high = low + step
@@ -162,21 +162,23 @@ def growing_spheres_search(
 
 
 class GrowingSpheresExplainer(BaseExplainer):
-    def __init__(self, keys_mutable: list, 
-             keys_immutable: list, 
-             feature_order: list, 
-             binary_cols: list, 
-             continous_cols: list,
-             pred_fn_crisp: callable,
-             target_proba: float, 
-             max_iter: int = 1000,
-             n_search_samples: int = 1000, 
-             p_norm: float = 2,
-             step: float = 0.1
-        ) -> None:
-        '''
+    def __init__(
+        self,
+        keys_mutable: list,
+        keys_immutable: list,
+        feature_order: list,
+        binary_cols: list,
+        continous_cols: list,
+        pred_fn_crisp: callable,
+        target_proba: float,
+        max_iter: int = 1000,
+        n_search_samples: int = 1000,
+        p_norm: float = 2,
+        step: float = 0.1,
+    ) -> None:
+        """
         Prepare the Growing Spheres explainer.
-        
+
         Parameters:
             - keys_mutable: the mutable keys (list)
             - keys_immutable: the immutable keys (list)
@@ -189,13 +191,13 @@ class GrowingSpheresExplainer(BaseExplainer):
             - n_search_samples: the number of search samples (int)
             - p_norm: the norm (float)
             - step: the step (float)
-        '''
-        
+        """
+
         self.keys_mutable = keys_mutable
         self.keys_immutable = keys_immutable
         self.feature_order = feature_order
         self.binary_cols = binary_cols
-        self.continous_cols= continous_cols
+        self.continous_cols = continous_cols
         self.pred_fn = pred_fn_crisp
         self.target_proba = target_proba
         self.max_iter = max_iter
@@ -204,28 +206,31 @@ class GrowingSpheresExplainer(BaseExplainer):
         self.n_search_samples = n_search_samples
 
         self.prep_done = True
-        
+
     def prep(self) -> None:
-        '''
+        """
         Prepare the explainer.
-        '''
+        """
         pass
-        
-    def generate(self, query_instance: np.ndarray | pd.DataFrame, 
-        ) -> np.ndarray:
-        '''
+
+    def generate(
+        self,
+        query_instance: np.ndarray | pd.DataFrame,
+        **kwargs,
+    ) -> np.ndarray:
+        """
         Generate the counterfactual.
 
         Parameters:
             - query_instance: the query instance (np.ndarray | pd.DataFrame)
-        '''
-        
-        assert self.prep_done, 'You must prepare the explainer first'
-        
+        """
+
+        assert self.prep_done, "You must prepare the explainer first"
+
         if isinstance(query_instance, np.ndarray):
-            qi = query_instance.reshape(1, -1) # reshape to 2D
+            qi = query_instance.reshape(1, -1)  # reshape to 2D
             query_instance = pd.DataFrame(qi, columns=self.feature_order)
-            
+
         return growing_spheres_search(
             instance=query_instance,
             keys_mutable=self.keys_mutable,
@@ -239,4 +244,3 @@ class GrowingSpheresExplainer(BaseExplainer):
             step=self.step,
             max_iter=self.max_iter,
         )
-        

@@ -6,12 +6,11 @@ import pandas as pd
 import numpy as np
 from tqdm import tqdm
 from sklearn.neighbors import NearestNeighbors
-import hydra
-from omegaconf import DictConfig, OmegaConf
 
 # Project imports
-from datasets import Dataset, DatasetPreprocessor
-from experiments_utils import (
+from .explainers.posthoc import robx_algorithm
+from .datasets import Dataset, DatasetPreprocessor
+from .experiments_utils import (
     train_model,
     train_B,
     train_model_2,
@@ -25,21 +24,26 @@ from experiments_utils import (
     sample_architectures,
     get_B,
 )
-from robx import robx_algorithm
 
-log = logging.getLogger(__name__)
-log.setLevel(logging.INFO)
+# log = logging.getLogger(__name__)
+# log.setLevel(logging.DEBUG)
 
 
-@hydra.main(config_path="../configs", config_name="config_dev", version_base=None)
-def experiment(cfg: DictConfig):
-    config = OmegaConf.to_container(cfg)
-
+def experiment(config: dict):
     GENERAL = config["general"]
     EXPERIMENTS_SETUP = config["experiments_setup"]
     MODEL_HYPERPARAMETERS = config["model_hyperparameters"]
     BETA_ROB = config["beta_rob"]
     ROBX = config["robx"]
+
+    mm_dd = time.strftime("%m-%d")
+    salted_hash = str(abs(hash(str(config))) + int(time.time()))[:5]
+    prefix = f"{mm_dd}_{salted_hash}"
+    GENERAL["result_path"] = os.path.join(GENERAL["result_path"], prefix)
+    GENERAL["model_path"] = os.path.join(GENERAL["model_path"], prefix)
+    GENERAL["log_path"] = os.path.join(GENERAL["log_path"], prefix)
+
+    logging.debug(config)
 
     # Extract the results directory
     results_dir = GENERAL["result_path"]
@@ -564,10 +568,12 @@ def experiment(cfg: DictConfig):
                                 global_iteration % save_every_n_iterations == 0
                                 and global_iteration > 0
                             ):
-                                # results_df.to_feather(f'./{results_df_dir}/{global_iteration}_results.feather')
-                                results_df.to_csv(
-                                    f"{results_df_dir}/{global_iteration}_results.csv"
+                                results_df.to_feather(
+                                    f"{results_df_dir}/{global_iteration}_results.feather"
                                 )
+                                # results_df.to_csv(
+                                #     f"{results_df_dir}/{global_iteration}_results.csv"
+                                # )
                                 cols = results_df.columns
 
                                 # Clear the results_df to save memory and speed up the process
@@ -580,8 +586,8 @@ def experiment(cfg: DictConfig):
                         first_flag = False
 
     # Final save
-    # results_df.to_feather(f'./{results_df_dir}/{global_iteration}_results.feather')
-    results_df.to_csv(f"{results_df_dir}/{global_iteration}_results.csv")
+    results_df.to_feather(f"{results_df_dir}/{global_iteration}_results.feather")
+    # results_df.to_csv(f"{results_df_dir}/{global_iteration}_results.csv")
     # results_df = pd.DataFrame(columns=results_df.columns)
 
     # Progress bar close

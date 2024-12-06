@@ -10,6 +10,7 @@ from torch import nn
 
 from .base_explainer import BaseExplainer
 
+
 class ModelWrap:
     def __init__(self, model):
         self.model = model
@@ -23,21 +24,21 @@ class ModelWrap:
         out[:, 0] = 1 - out[:, 1]
         return out
 
-class RBRExplainer(BaseExplainer):
 
-    def __init__(self, 
-        train_dataset: pd.DataFrame, 
+class RBRExplainer(BaseExplainer):
+    def __init__(
+        self,
+        train_dataset: pd.DataFrame,
         explained_model: nn.Module,
     ) -> None:
-        
         model_wrap = ModelWrap(explained_model)
         self.model = model_wrap
         self.train_data = train_dataset.to_numpy()
-    
+
     def prep(self, hparams: dict = None) -> None:
-        '''
+        """
         Prepare the explainer.
-        '''
+        """
         if hparams is not None:
             self.config = {
                 "ec": {
@@ -58,19 +59,30 @@ class RBRExplainer(BaseExplainer):
         else:
             self.config = hparams
 
-
-    def generate(self, query_instance: pd.DataFrame) -> np.ndarray:
-        '''
+    def generate(
+        self,
+        query_instance: pd.DataFrame,
+        **kwargs,
+    ) -> np.ndarray:
+        """
         Generate counterfactuals.
-        '''
+        """
         if isinstance(query_instance, pd.DataFrame):
             query_instance = query_instance.to_numpy().flatten()
-            
-        arg = RBR(self.model, self.train_data, num_cfacts=1, max_iter=500, random_state=123, device=self.config["device"])
+
+        arg = RBR(
+            self.model,
+            self.train_data,
+            num_cfacts=1,
+            max_iter=500,
+            random_state=123,
+            device=self.config["device"],
+        )
         x_ar = arg.fit_instance(
             query_instance,
             self.config["ec"]["num_samples"],
-            self.config["perturb_radius"]["synthesis"] * self.config["ec"]["max_distance"],
+            self.config["perturb_radius"]["synthesis"]
+            * self.config["ec"]["max_distance"],
             self.config["ec"]["rbr_params"]["delta_plus"],
             self.config["ec"]["rbr_params"]["sigma"],
             self.config["ec"]["rbr_params"]["epsilon_op"],
@@ -111,7 +123,11 @@ class OptimisticLikelihood(torch.nn.Module):
         d = v[..., 1] + self.sigma
         p = self.x_dim
 
-        L = torch.log(d) + (c - v[..., 0]) ** 2 / (2 * d**2) + (p - 1) * torch.log(self.sigma)
+        L = (
+            torch.log(d)
+            + (c - v[..., 0]) ** 2 / (2 * d**2)
+            + (p - 1) * torch.log(self.sigma)
+        )
 
         return L
 
@@ -120,7 +136,11 @@ class OptimisticLikelihood(torch.nn.Module):
         d = v[..., 1] + self.sigma
         p = self.x_dim
 
-        L = torch.log(d) + (c - v[..., 0]) ** 2 / (2 * d**2) + (p - 1) * torch.log(self.sigma)
+        L = (
+            torch.log(d)
+            + (c - v[..., 0]) ** 2 / (2 * d**2)
+            + (p - 1) * torch.log(self.sigma)
+        )
 
         v_grad = torch.zeros_like(v, device=self.device)
         v_grad[..., 0] = -(c - v[..., 0]) / d**2
@@ -138,7 +158,9 @@ class OptimisticLikelihood(torch.nn.Module):
 
         for t in range(max_iter):
             F, grad = self.forward(v, x, x_feas)
-            v = self.projection(v - 1 / torch.sqrt(torch.tensor(max_iter, device=self.device)) * grad)
+            v = self.projection(
+                v - 1 / torch.sqrt(torch.tensor(max_iter, device=self.device)) * grad
+            )
 
             loss_sum = F.sum().data.item()
             loss_diff = min_loss - loss_sum
@@ -183,9 +205,15 @@ class PessimisticLikelihood(torch.nn.Module):
         d = u[..., 1] + self.sigma
         p = self.x_dim
         sqrt_p = torch.sqrt(p)
-        f = torch.sqrt((zeta + self.epsilon_pe**2 - p * u[..., 0] ** 2 - u[..., 1] ** 2) / (p - 1))
+        f = torch.sqrt(
+            (zeta + self.epsilon_pe**2 - p * u[..., 0] ** 2 - u[..., 1] ** 2) / (p - 1)
+        )
 
-        L = -torch.log(d) - (c + sqrt_p * u[..., 0]) ** 2 / (2 * d**2) - (p - 1) * torch.log(f + self.sigma)
+        L = (
+            -torch.log(d)
+            - (c + sqrt_p * u[..., 0]) ** 2 / (2 * d**2)
+            - (p - 1) * torch.log(f + self.sigma)
+        )
 
         return L
 
@@ -194,13 +222,25 @@ class PessimisticLikelihood(torch.nn.Module):
         d = u[..., 1] + self.sigma
         p = self.x_dim
         sqrt_p = torch.sqrt(p)
-        f = torch.sqrt((zeta + self.epsilon_pe**2 - p * u[..., 0] ** 2 - u[..., 1] ** 2) / (p - 1))
+        f = torch.sqrt(
+            (zeta + self.epsilon_pe**2 - p * u[..., 0] ** 2 - u[..., 1] ** 2) / (p - 1)
+        )
 
-        L = -torch.log(d) - (c + sqrt_p * u[..., 0]) ** 2 / (2 * d**2) - (p - 1) * torch.log(f + self.sigma)
+        L = (
+            -torch.log(d)
+            - (c + sqrt_p * u[..., 0]) ** 2 / (2 * d**2)
+            - (p - 1) * torch.log(f + self.sigma)
+        )
 
         u_grad = torch.zeros_like(u, device=self.device)
-        u_grad[..., 0] = -sqrt_p * (c + sqrt_p * u[..., 0]) / d**2 - (p * u[..., 0]) / (f * (f + self.sigma))
-        u_grad[..., 1] = -1 / d + (c + sqrt_p * u[..., 0]) ** 2 / d**3 + u[..., 1] / (f * (f + self.sigma))
+        u_grad[..., 0] = -sqrt_p * (c + sqrt_p * u[..., 0]) / d**2 - (p * u[..., 0]) / (
+            f * (f + self.sigma)
+        )
+        u_grad[..., 1] = (
+            -1 / d
+            + (c + sqrt_p * u[..., 0]) ** 2 / d**3
+            + u[..., 1] / (f * (f + self.sigma))
+        )
 
         return L, u_grad
 
@@ -214,7 +254,9 @@ class PessimisticLikelihood(torch.nn.Module):
 
         for t in range(max_iter):
             F, grad = self.forward(u, x, x_feas)
-            u = self.projection(u - 1 / torch.sqrt(torch.tensor(max_iter, device=self.device)) * grad)
+            u = self.projection(
+                u - 1 / torch.sqrt(torch.tensor(max_iter, device=self.device)) * grad
+            )
 
             loss_sum = F.sum().data.item()
             loss_diff = min_loss - loss_sum
@@ -238,7 +280,17 @@ class PessimisticLikelihood(torch.nn.Module):
 
 
 class RBRLoss(torch.nn.Module):
-    def __init__(self, X_feas, X_feas_pos, X_feas_neg, epsilon_op, epsilon_pe, sigma, device="cpu", verbose=False):
+    def __init__(
+        self,
+        X_feas,
+        X_feas_pos,
+        X_feas_neg,
+        epsilon_op,
+        epsilon_pe,
+        sigma,
+        device="cpu",
+        verbose=False,
+    ):
         super(RBRLoss, self).__init__()
         self.device = device
         self.verbose = verbose
@@ -252,8 +304,12 @@ class RBRLoss(torch.nn.Module):
         self.sigma = torch.tensor(sigma).to(self.device)
         self.x_dim = torch.tensor(X_feas.shape[-1]).to(self.device)
 
-        self.op_likelihood = OptimisticLikelihood(self.x_dim, self.epsilon_op, self.sigma, self.device)
-        self.pe_likelihood = PessimisticLikelihood(self.x_dim, self.epsilon_pe, self.sigma, self.device)
+        self.op_likelihood = OptimisticLikelihood(
+            self.x_dim, self.epsilon_op, self.sigma, self.device
+        )
+        self.pe_likelihood = PessimisticLikelihood(
+            self.x_dim, self.epsilon_pe, self.sigma, self.device
+        )
 
     def forward(self, x, verbose=False):
         if verbose:
@@ -261,20 +317,28 @@ class RBRLoss(torch.nn.Module):
             print(f"N_pos: {self.X_feas_pos.shape}")
 
         u = self.pe_likelihood.optimize(
-            x.detach().clone().expand([self.X_feas_pos.shape[0], -1]), self.X_feas_pos, verbose=self.verbose
+            x.detach().clone().expand([self.X_feas_pos.shape[0], -1]),
+            self.X_feas_pos,
+            verbose=self.verbose,
         )
 
-        F = self.pe_likelihood._forward(u, x.expand([self.X_feas_pos.shape[0], -1]), self.X_feas_pos)
+        F = self.pe_likelihood._forward(
+            u, x.expand([self.X_feas_pos.shape[0], -1]), self.X_feas_pos
+        )
         denom = torch.logsumexp(F, -1)
 
         if verbose:
             print(f"Pessimistic self.denominator: {denom}")
 
         v = self.op_likelihood.optimize(
-            x.detach().clone().expand([self.X_feas_neg.shape[0], -1]), self.X_feas_neg, verbose=self.verbose
+            x.detach().clone().expand([self.X_feas_neg.shape[0], -1]),
+            self.X_feas_neg,
+            verbose=self.verbose,
         )
 
-        F = self.op_likelihood._forward(v, x.expand([self.X_feas_neg.shape[0], -1]), self.X_feas_neg)
+        F = self.op_likelihood._forward(
+            v, x.expand([self.X_feas_neg.shape[0], -1]), self.X_feas_neg
+        )
         numer = torch.logsumexp(-F, -1)
 
         if verbose:
@@ -283,7 +347,6 @@ class RBRLoss(torch.nn.Module):
         result = numer - denom
 
         return result, denom, numer
-
 
 
 plt.gca().set_aspect("equal", adjustable="box")
@@ -311,7 +374,16 @@ class RBR(object):
 
     DECISION_THRESHOLD = 0.5
 
-    def __init__(self, model, train_data, y_target=1, num_cfacts=10, max_iter=1000, random_state=None, device="cuda"):
+    def __init__(
+        self,
+        model,
+        train_data,
+        y_target=1,
+        num_cfacts=10,
+        max_iter=1000,
+        random_state=None,
+        device="cuda",
+    ):
         self.random_state = check_random_state(random_state)
         self.model = model
         self.max_iter = max_iter
@@ -338,7 +410,9 @@ class RBR(object):
 
         d = self.dist(self.train_data, x)
         order = torch.argsort(d)
-        x_cfact_list = self.train_data[order[self.train_label[order] == (1 - x_label)]][:k]
+        x_cfact_list = self.train_data[order[self.train_label[order] == (1 - x_label)]][
+            :k
+        ]
         best_x_b = None
         best_dist = torch.tensor(float("inf"))
 
@@ -377,7 +451,9 @@ class RBR(object):
             return x
         u, _ = torch.sort(x, descending=True)
         cssv = torch.cumsum(u, 0)
-        rho = torch.nonzero(u * torch.arange(1, p + 1).to(self.device) > (cssv - delta))[-1, 0]
+        rho = torch.nonzero(
+            u * torch.arange(1, p + 1).to(self.device) > (cssv - delta)
+        )[-1, 0]
         theta = (cssv[rho] - delta) / (rho + 1.0)
         w = torch.clip(x - theta, min=0)
         return w
@@ -410,7 +486,6 @@ class RBR(object):
         grad1_list = []
 
         for t in range(self.max_iter):
-
             if x_t.grad is not None:
                 x_t.grad.data.zero_()
             F, pe, op = loss_fn(x_t)
@@ -429,7 +504,11 @@ class RBR(object):
                 else:
                     x_t_handle = x_t.detach().unsqueeze(0) @ self.pca
                     x_t_handle = x_t_handle.squeeze()
-                point_ax.scatter(x_t_handle[0].cpu().numpy(), x_t_handle[1].cpu().numpy(), color="black")
+                point_ax.scatter(
+                    x_t_handle[0].cpu().numpy(),
+                    x_t_handle[1].cpu().numpy(),
+                    color="black",
+                )
                 point_ax.arrow(
                     x_t_handle[0].cpu().numpy(),
                     x_t_handle[1].cpu().numpy(),
@@ -449,17 +528,26 @@ class RBR(object):
                 break
 
             with torch.no_grad():
-                x_new = x_t - 1 / torch.sqrt(torch.tensor(1e3, device=self.device)) * x_t.grad
+                x_new = (
+                    x_t
+                    - 1 / torch.sqrt(torch.tensor(1e3, device=self.device)) * x_t.grad
+                )
                 if verbose:
                     if x_new.shape[0] == 2:
                         x_new_handle = x_new.detach()
                     else:
                         x_new_handle = x_new.detach().unsqueeze(0) @ self.pca
                         x_new_handle = x_new_handle.squeeze()
-                    point_ax.scatter(x_new_handle[0].cpu().numpy(), x_new_handle[1].cpu().numpy(), color="cyan")
+                    point_ax.scatter(
+                        x_new_handle[0].cpu().numpy(),
+                        x_new_handle[1].cpu().numpy(),
+                        color="cyan",
+                    )
                     point_fig.savefig("points.png")
 
-                x_new = self.projection(x_new - self.x0, delta) + self.x0  # shift to origin before project
+                x_new = (
+                    self.projection(x_new - self.x0, delta) + self.x0
+                )  # shift to origin before project
 
             for i, elem in enumerate(x_new.data):
                 x_t.data[i] = elem
@@ -491,7 +579,16 @@ class RBR(object):
         return F, x_t.detach()
 
     def fit_instance(
-        self, x0, num_samples, perturb_radius, delta_plus, sigma, epsilon_op, epsilon_pe, ec, verbose=False
+        self,
+        x0,
+        num_samples,
+        perturb_radius,
+        delta_plus,
+        sigma,
+        epsilon_op,
+        epsilon_pe,
+        ec,
+        verbose=False,
     ):
         x0 = torch.from_numpy(x0.copy()).float().to(self.device)
         self.x0 = x0
@@ -504,7 +601,10 @@ class RBR(object):
         delta = delta_base + delta_plus
 
         X_feas = self.feasible_set(
-            x_b, radius=perturb_radius, num_samples=num_samples, random_state=self.random_state
+            x_b,
+            radius=perturb_radius,
+            num_samples=num_samples,
+            random_state=self.random_state,
         ).float()
 
         if verbose:
@@ -513,8 +613,12 @@ class RBR(object):
 
         y_feas = self.make_prediction(X_feas).to(self.device)
 
-        X_feas_pos = X_feas[y_feas == self.y_target].reshape([sum(y_feas == self.y_target), -1])
-        X_feas_neg = X_feas[y_feas == (1 - self.y_target)].reshape([sum(y_feas == (1 - self.y_target)), -1])
+        X_feas_pos = X_feas[y_feas == self.y_target].reshape(
+            [sum(y_feas == self.y_target), -1]
+        )
+        X_feas_neg = X_feas[y_feas == (1 - self.y_target)].reshape(
+            [sum(y_feas == (1 - self.y_target)), -1]
+        )
 
         if verbose:
             if x0.shape[0] == 2:
@@ -533,7 +637,9 @@ class RBR(object):
             else:
                 X_feas_neg_handle = X_feas_neg.detach() @ self.pca
 
-            point_ax.scatter(x0_handle[0].cpu().numpy(), x0_handle[1].cpu().numpy(), color="blue")
+            point_ax.scatter(
+                x0_handle[0].cpu().numpy(), x0_handle[1].cpu().numpy(), color="blue"
+            )
             point_ax.scatter(
                 [x[0].cpu().numpy() for x in X_feas_neg_handle],
                 [x[1].cpu().numpy() for x in X_feas_neg_handle],
@@ -546,7 +652,15 @@ class RBR(object):
             )
             point_fig.savefig("points.png")
 
-        loss_fn = RBRLoss(X_feas, X_feas_pos, X_feas_neg, epsilon_op, epsilon_pe, sigma, device=self.device)
+        loss_fn = RBRLoss(
+            X_feas,
+            X_feas_pos,
+            X_feas_neg,
+            epsilon_op,
+            epsilon_pe,
+            sigma,
+            device=self.device,
+        )
 
         loss, x = self.optimize(x_b, delta, loss_fn, verbose=verbose)
 
@@ -558,7 +672,14 @@ def generate_recourse(x0, model, random_state, params=dict()):
     train_data = params["train_data"]
 
     ec = params["config"]
-    arg = RBR(model, train_data, num_cfacts=1000, max_iter=500, random_state=random_state, device=params["device"])
+    arg = RBR(
+        model,
+        train_data,
+        num_cfacts=1000,
+        max_iter=500,
+        random_state=random_state,
+        device=params["device"],
+    )
 
     x_ar = arg.fit_instance(
         x0,

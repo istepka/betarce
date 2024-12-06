@@ -1,7 +1,7 @@
 import unittest
 
-from src.datasets.dataset import Dataset
-from src.datasets.preprocessor import DatasetPreprocessor
+from src.datasets import Dataset
+from src.datasets import DatasetPreprocessor
 
 
 class TestDataset(unittest.TestCase):
